@@ -10,6 +10,7 @@ def make_book():
 
 # ---- resting orders / best bid & ask ----
 
+
 def test_non_marketable_limit_orders_rest_in_book():
     book = make_book()
     book.add_limit_order(Order(1, "buy", 99, 10))
@@ -35,6 +36,7 @@ def test_best_bid_and_ask_track_multiple_price_levels():
 
 
 # ---- matching ----
+
 
 def test_marketable_buy_matches_resting_ask_fully():
     book = make_book()
@@ -94,11 +96,12 @@ def test_price_time_priority_older_order_matches_first():
 
     assert book.trades == [(101, 5)]
     assert 1 not in book.order_index  # older order fully filled and removed
-    assert 2 in book.order_index      # newer order untouched
+    assert 2 in book.order_index  # newer order untouched
     assert book.snapshot()["asks"] == {101: 5}
 
 
 # ---- market orders ----
+
 
 def test_market_buy_sweeps_multiple_price_levels():
     book = make_book()
@@ -134,6 +137,7 @@ def test_market_order_with_insufficient_liquidity_does_not_crash():
 
 # ---- cancellation ----
 
+
 def test_cancel_order_removes_resting_order():
     book = make_book()
     book.add_limit_order(Order(1, "buy", 99, 10))
@@ -163,6 +167,7 @@ def test_cancel_unknown_order_id_is_a_no_op(capsys):
 
 
 # ---- mid price / spread ----
+
 
 def test_mid_price_and_spread_with_both_sides():
     book = make_book()
@@ -201,6 +206,6 @@ def test_mid_price_falls_back_to_last_known_mid_once_book_empties():
     book.mid_price()  # caches last_mid = 100
 
     book.add_market_order("buy", 5)  # clears the ask side
-    book.cancel_order(1)             # clears the bid side too
+    book.cancel_order(1)  # clears the bid side too
 
     assert book.mid_price() == 100

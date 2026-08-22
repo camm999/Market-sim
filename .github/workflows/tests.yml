@@ -20,3 +20,6 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -v
+
+      - name: Type check
+        run: python -m mypy lob simulator metrics --ignore-missing-imports --explicit-package-bases
