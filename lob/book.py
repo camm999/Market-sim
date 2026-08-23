@@ -1,6 +1,7 @@
 # lob/book.py
 
 from collections import deque
+import heapq
 from typing import Any, Deque, Dict, List, Literal, Optional, Tuple
 
 Side = Literal["buy", "sell"]
@@ -27,11 +28,25 @@ class LimitOrderBook:
             None  # cached mid price, used as a fallback once the book empties out
         )
 
+        # heaps - see read_me and benchmarks/bench_best_price.py for why we use heaps to track best bid/ask
+        self._bid_heap: List[float] = []
+        self._ask_heap: List[float] = []
+
     def _best_bid(self) -> Optional[float]:
-        return max(self.bids.keys()) if self.bids else None  # Returns the highest bid price
+        while self._bid_heap:
+            price = -self._bid_heap[0]
+            if price in self.bids:
+                return price
+            heapq.heappop(self._bid_heap)  # stale entry: that price level no longer exists
+        return None
 
     def _best_ask(self) -> Optional[float]:
-        return min(self.asks.keys()) if self.asks else None  # returns min ask price
+        while self._ask_heap:
+            price = self._ask_heap[0]
+            if price in self.asks:
+                return price
+            heapq.heappop(self._ask_heap)  # stale entry: that price level no longer exists
+        return None
 
     def add_limit_order(self, order: Order) -> None:
         """Add a limit order to the book or match it if marketable."""
@@ -72,9 +87,9 @@ class LimitOrderBook:
 
         # If remaining size, add to book
         if order.size > 0:
-            self.bids.setdefault(order.price, deque()).append(
-                order
-            )  # setdefault ensures a queue exists at that price. Append adds order to end of queue.
+            if order.price not in self.bids:
+                heapq.heappush(self._bid_heap, -order.price)  # new price level: index it
+            self.bids.setdefault(order.price, deque()).append(order)  # setdefault ensures a queue exists at that price. Append adds order to end of queue.
 
     def _match_sell(self, order: Order) -> None:
         while order.size > 0 and self.bids:
@@ -102,6 +117,8 @@ class LimitOrderBook:
 
         # If remaining size, add to book
         if order.size > 0:
+            if order.price not in self.asks:
+                heapq.heappush(self._ask_heap, order.price)  # new price level: index it
             self.asks.setdefault(order.price, deque()).append(order)
 
     def snapshot(self) -> Dict[str, Any]:

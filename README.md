@@ -2,32 +2,39 @@
 
 ![Tests](https://github.com/camm999/Market-sim/actions/workflows/tests.yml/badge.svg)
 
-A limit order book (LOB) simulator written from scratch in Python — the matching engine, random order flow, a simple market-making agent, and metrics tracking, with a small pytest suite covering the core engine.
+A limit order book (LOB) simulator written from scratch in Python — the matching engine, random order flow, two contrasting trading agents, and metrics tracking, with a pytest suite and mypy checking the core engine.
 
 ## Features
 
-- **Matching engine** (`lob/book.py`) — limit and market orders, price-time priority, partial fills, cancellation.
+- **Matching engine** (`lob/book.py`) — limit and market orders, price-time priority, partial fills, cancellation. Best bid/ask lookup is heap-based (`O(log n)` amortized) rather than scanning every price level.
 - **Random order flow** (`simulator/random_flow.py`) — Poisson-style arrivals of random limit/market orders around the mid price, to simulate a live market.
-- **Market maker** (`simulator/market_maker.py`) — a simple agent that continuously quotes a bid and ask around mid, tracks its own inventory/cash, and skews its quotes against inventory to manage risk.
+- **Market maker** (`simulator/market_maker.py`) — quotes a bid and ask around mid every step, tracks its own inventory/cash, and skews its quotes against inventory to manage risk.
+- **Imbalance trader** (`simulator/imbalance_trader.py`) — a contrasting agent that trades *with* the book's imbalance instead of against its own inventory.
 - **Metrics** (`metrics/metrics.py`) — tracks mid price, spread, depth, and order book imbalance over a run, and plots them.
-- **Tests** (`tests/test_book.py`) — pytest unit tests covering matching, price-time priority, partial fills, market order sweeps, and cancellation.
+- **Tests** (`tests/`) — pytest unit tests covering matching, price-time priority, partial fills, cancellation, and both agents; mypy runs in CI alongside pytest.
+- **Benchmarks** (`benchmarks/`) — measures the heap-based best bid/ask lookup against the naive scan it replaced.
 
 ## Project structure
 
 ```
 market_sim/
 ├── lob/
-│   └── book.py           # core order book: Order, LimitOrderBook
+│   └── book.py                  # core order book: Order, LimitOrderBook
 ├── simulator/
-│   ├── random_flow.py    # random order flow generator
-│   └── market_maker.py   # market-making agent
+│   ├── random_flow.py           # random order flow generator
+│   ├── market_maker.py          # market-making agent
+│   └── imbalance_trader.py      # imbalance-following agent
 ├── metrics/
-│   └── metrics.py        # metrics tracking + plotting
+│   └── metrics.py               # metrics tracking + plotting
 ├── tests/
-│   └── test_book.py      # pytest unit tests
-├── main.py                # demo entry point
+│   ├── test_book.py             # matching engine tests
+│   ├── test_market_maker.py
+│   └── test_imbalance_trader.py
+├── benchmarks/
+│   └── bench_best_price.py      # best bid/ask lookup benchmark
+├── main.py                       # demo entry point
 ├── requirements.txt
-└── diary.md               # dev log
+└── diary.md                      # dev log
 ```
 
 ## Quickstart
@@ -45,6 +52,7 @@ python main.py
 
 ```bash
 python -m pytest -v
+python -m mypy lob simulator metrics --ignore-missing-imports --explicit-package-bases
 ```
 
 ## How the order book works
@@ -60,6 +68,23 @@ When a new order arrives, the exchange checks whether its price is good enough t
 ## How the market maker works
 
 A market maker doesn't bet on direction — it continuously posts both a bid and an ask around the current price, earning the spread on round trips. In exchange for supplying that liquidity, it absorbs inventory risk: every fill pushes its position long or short, so `MarketMaker` skews its quotes against its own inventory (long → quote lower, short → quote higher) to lean back toward flat instead of letting risk build up unbounded, and stops adding to a side once a configurable `max_inventory` limit is hit.
+
+## Performance
+
+`_best_bid()`/`_best_ask()` used to scan every resting price level with `max()`/`min()` on every call — `O(n)` in the number of price levels, and these are called on nearly every operation. They're now backed by a heap (bids negated to simulate a max-heap; lazy deletion for entries whose price level has since emptied out), which keeps lookups `O(log n)` amortized regardless of how many levels are resting.
+
+```bash
+python benchmarks/bench_best_price.py
+```
+
+```
+  levels    dict max()     heap peek   speedup
+      10        1.32ms        0.40ms      3.3x
+     100        6.61ms        0.34ms     19.4x
+    1000       60.36ms        0.35ms    174.4x
+   10000      475.84ms        0.24ms   1987.7x
+   50000     2864.49ms        0.27ms  10423.9x
+```
 
 ## Example output
 

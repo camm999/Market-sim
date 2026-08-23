@@ -35,6 +35,54 @@ def test_best_bid_and_ask_track_multiple_price_levels():
     assert book._best_ask() == 101
 
 
+# ---- best price heap (lazy-deletion correctness) ----
+
+
+def test_best_bid_survives_out_of_order_inserts_and_removals():
+    book = make_book()
+    book.add_limit_order(Order(1, "buy", 95, 5))
+    book.add_limit_order(Order(2, "buy", 105, 5))
+    book.add_limit_order(Order(3, "buy", 100, 5))
+    assert book._best_bid() == 105
+
+    book.cancel_order(2)  # remove the current best bid's whole price level
+    assert book._best_bid() == 100
+
+    book.cancel_order(3)
+    assert book._best_bid() == 95
+
+    book.cancel_order(1)
+    assert book._best_bid() is None
+
+
+def test_best_bid_correct_after_levels_matched_away():
+    book = make_book()
+    for order_id, price in enumerate([98, 102, 95, 110, 90], start=1):
+        book.add_limit_order(Order(order_id, "buy", price, 5))
+    assert book._best_bid() == 110
+
+    book.add_market_order("sell", 5)  # sweeps the 110 level entirely
+    assert book._best_bid() == 102
+
+    book.add_market_order("sell", 5)  # sweeps the 102 level entirely
+    assert book._best_bid() == 98
+
+
+def test_best_ask_correct_after_price_level_emptied_and_reused():
+    book = make_book()
+    book.add_limit_order(Order(1, "sell", 101, 5))
+    assert book._best_ask() == 101
+
+    book.cancel_order(1)  # price level 101 is gone; its heap entry is now stale
+    assert book._best_ask() is None
+
+    book.add_limit_order(Order(2, "sell", 101, 3))  # a new order reuses the same price
+    assert book._best_ask() == 101
+
+    book.cancel_order(2)
+    assert book._best_ask() is None
+
+
 # ---- matching ----
 
 
