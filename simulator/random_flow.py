@@ -1,6 +1,7 @@
 from typing import Optional
 from lob.book import LimitOrderBook, Order, Side
 from metrics.metrics import Metrics
+from metrics.depth_history import DepthHistory
 from simulator.market_maker import MarketMaker
 from simulator.imbalance_trader import ImbalanceTrader
 import random
@@ -38,6 +39,7 @@ def simulate_random_flow(
     metrics: Optional[Metrics] = None,
     market_maker: Optional[MarketMaker] = None,
     imbalance_trader: Optional[ImbalanceTrader] = None,
+    depth_history: Optional[DepthHistory] = None,
 ) -> Metrics:
     """
     Simulate random order flow using Poisson arrivals.
@@ -47,6 +49,7 @@ def simulate_random_flow(
     metrics: optional Metrics instance to record into; created if not passed
     market_maker: optional MarketMaker that re-quotes around mid every step
     imbalance_trader: optional ImbalanceTrader that trades with strong imbalance
+    depth_history: optional DepthHistory to record a per-step depth snapshot into
     """
 
     if metrics is None:
@@ -76,6 +79,9 @@ def simulate_random_flow(
             random_market_order(book)
 
         metrics.update(book)
+
+        if depth_history is not None:
+            depth_history.update(book)
 
         # Optional: print mid price every step
         if t % 50 == 0:

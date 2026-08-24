@@ -11,6 +11,7 @@ A limit order book (LOB) simulator written from scratch in Python — the matchi
 - **Market maker** (`simulator/market_maker.py`) — quotes a bid and ask around mid every step, tracks its own inventory/cash, and skews its quotes against inventory to manage risk.
 - **Imbalance trader** (`simulator/imbalance_trader.py`) — a contrasting agent that trades *with* the book's imbalance instead of against its own inventory.
 - **Metrics** (`metrics/metrics.py`) — tracks mid price, spread, depth, and order book imbalance over a run, and plots them.
+- **Depth heatmap** (`metrics/depth_history.py`) — records resting size at every price level relative to mid, each step, and renders it as an L2-style heatmap over time.
 - **Tests** (`tests/`) — pytest unit tests covering matching, price-time priority, partial fills, cancellation, and both agents; mypy runs in CI alongside pytest.
 - **Benchmarks** (`benchmarks/`) — measures the heap-based best bid/ask lookup against the naive scan it replaced.
 
@@ -25,11 +26,13 @@ market_sim/
 │   ├── market_maker.py          # market-making agent
 │   └── imbalance_trader.py      # imbalance-following agent
 ├── metrics/
-│   └── metrics.py               # metrics tracking + plotting
+│   ├── metrics.py                # metrics tracking + plotting
+│   └── depth_history.py         # per-step depth snapshots + heatmap
 ├── tests/
 │   ├── test_book.py             # matching engine tests
 │   ├── test_market_maker.py
-│   └── test_imbalance_trader.py
+│   ├── test_imbalance_trader.py
+│   └── test_depth_history.py
 ├── benchmarks/
 │   └── bench_best_price.py      # best bid/ask lookup benchmark
 ├── main.py                       # demo entry point
@@ -46,7 +49,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-`main.py` runs a short manual demo — placing, matching, and cancelling orders — then a 500-step random-flow simulation with the market maker active, and saves a chart of mid price / spread / imbalance to `simulation.png`.
+`main.py` runs a short manual demo — placing, matching, and cancelling orders — then a 500-step random-flow simulation with both agents active, saving a chart of mid price / spread / imbalance to `simulation.png` and a depth heatmap to `depth_heatmap.png`.
 
 ## Running tests
 
@@ -88,4 +91,6 @@ python benchmarks/bench_best_price.py
 
 ## Example output
 
-Running `main.py` produces `simulation.png` — mid price, spread, and order book imbalance over the course of the simulated run.
+Running `main.py` produces `simulation.png` — mid price, spread, and order book imbalance over the course of the simulated run — and `depth_heatmap.png`, showing resting order book depth by price offset from mid over time (green = bid side, red = ask side):
+
+![Depth heatmap](depth_heatmap.png)

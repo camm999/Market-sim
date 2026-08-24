@@ -5,6 +5,7 @@ from lob.book import LimitOrderBook, Order
 from simulator.random_flow import simulate_random_flow
 from simulator.market_maker import MarketMaker
 from simulator.imbalance_trader import ImbalanceTrader
+from metrics.depth_history import DepthHistory
 
 
 def main():
@@ -50,8 +51,14 @@ def main():
 
     mm = MarketMaker(spread=2, size=5, max_inventory=50)
     it = ImbalanceTrader(threshold=0.4, size=5, max_inventory=50)
+    depth_history = DepthHistory()
     metrics = simulate_random_flow(
-        book, steps=500, sleep=0.01, market_maker=mm, imbalance_trader=it
+        book,
+        steps=500,
+        sleep=0.01,
+        market_maker=mm,
+        imbalance_trader=it,
+        depth_history=depth_history,
     )
 
     print(
@@ -65,6 +72,9 @@ def main():
 
     metrics.plot(save_path="simulation.png")
     print("Saved metrics plot to simulation.png")
+
+    depth_history.plot(save_path="depth_heatmap.png")
+    print("Saved depth heatmap to depth_heatmap.png")
 
 
 if __name__ == "__main__":
