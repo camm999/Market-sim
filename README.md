@@ -14,6 +14,8 @@ A limit order book (LOB) simulator written from scratch in Python — the matchi
 - **Depth heatmap** (`metrics/depth_history.py`) — records resting size at every price level relative to mid, each step, and renders it as an L2-style heatmap over time.
 - **Tests** (`tests/`) — pytest unit tests covering matching, price-time priority, partial fills, cancellation, and both agents; mypy runs in CI alongside pytest.
 - **Benchmarks** (`benchmarks/`) — measures the heap-based best bid/ask lookup against the naive scan it replaced.
+- **Strategy comparison** (`analysis/compare_strategies.py`) — runs the simulation across many random seeds and statistically compares `MarketMaker` vs `ImbalanceTrader` P&L, instead of judging either off a single run.
+- **Market maker tuning** (`analysis/tune_market_maker.py`) — sweeps `MarketMaker`'s `spread`/`max_inventory` across a grid to check whether its underperformance in the strategy comparison is a tuning problem or something structural.
 
 ## Project structure
 
@@ -32,9 +34,14 @@ market_sim/
 │   ├── test_book.py             # matching engine tests
 │   ├── test_market_maker.py
 │   ├── test_imbalance_trader.py
-│   └── test_depth_history.py
+│   ├── test_depth_history.py
+│   ├── test_compare_strategies.py
+│   └── test_tune_market_maker.py
 ├── benchmarks/
 │   └── bench_best_price.py      # best bid/ask lookup benchmark
+├── analysis/
+│   ├── compare_strategies.py    # multi-seed strategy comparison
+│   └── tune_market_maker.py     # market maker parameter sweep
 ├── main.py                       # demo entry point
 ├── requirements.txt
 └── diary.md                      # dev log
@@ -55,7 +62,7 @@ python main.py
 
 ```bash
 python -m pytest -v
-python -m mypy lob simulator metrics --ignore-missing-imports --explicit-package-bases
+python -m mypy lob simulator metrics analysis --ignore-missing-imports --explicit-package-bases
 ```
 
 ## How the order book works
@@ -88,6 +95,43 @@ python benchmarks/bench_best_price.py
    10000      475.84ms        0.24ms   1987.7x
    50000     2864.49ms        0.27ms  10423.9x
 ```
+
+## Strategy comparison
+
+A single simulation run only tells you what happened in one random scenario, not whether an agent has a real edge. `analysis/compare_strategies.py` runs the simulation across 200 independent random seeds and compares `MarketMaker` vs `ImbalanceTrader` on final mark-to-market P&L.
+
+```bash
+python -m analysis.compare_strategies
+```
+
+```
+200 runs, 0-199
+
+MarketMaker      mean=    27.24  stdev=  390.58  min= -1929.00  max=   619.00  profitable=125/200 ( 62.5%)
+ImbalanceTrader  mean=   378.03  stdev=  438.27  min=  -538.53  max= 2144.81  profitable=164/200 ( 82.0%)
+
+MarketMaker beat ImbalanceTrader head-to-head in 71/200 runs (35.5%)
+```
+
+Across this random-flow model, `ImbalanceTrader` comes out ahead on every measure — higher mean P&L, higher win rate, and it beats `MarketMaker` head-to-head in the majority of seeds. `MarketMaker` also has a much fatter downside tail (min of -1929 vs -538), consistent with it sometimes accumulating a large inventory position right as the price moves against it. This says more about how this particular random order flow behaves than it does about market making in general — a real market maker's edge shows up against genuine adverse-selection dynamics that this simplified flow doesn't fully capture — but it's a real, reproducible result rather than an anecdote from one run.
+
+![Strategy comparison](strategy_comparison.png)
+
+### Is that a tuning problem or something structural?
+
+`analysis/tune_market_maker.py` sweeps `MarketMaker`'s `spread` and `max_inventory` across a grid (`ImbalanceTrader` held fixed, same config as above) to check.
+
+```bash
+python -m analysis.tune_market_maker
+```
+
+![Market maker tuning](market_maker_tuning.png)
+
+`max_inventory` dominates the picture: `max_inventory=200` is the best or near-best choice at almost every spread tested, and the best configuration found (`spread=2, max_inventory=200`, mean P&L ≈ 322) more than triples the original baseline's mean (≈ 90 over this sweep's 50-seed sample). The original `max_inventory=50` default was simply too conservative — it stops `MarketMaker` from quoting one side too early during a trending run, missing out on further spread capture for the rest of that run.
+
+That's a real improvement, but it still doesn't fully close the gap to `ImbalanceTrader`'s ≈ 378 mean from the comparison above — so the underperformance looks like it's *partly* a tuning issue (fixable, and now mostly fixed) and *partly* structural: within the range tested, a strategy that follows the book's imbalance keeps an edge over one that provides liquidity passively, at least in this random-walk order flow model, which doesn't model the genuine adverse selection a real market maker has to price against.
+
+There's also a striking red "danger zone" in the heatmap — mid-range `max_inventory` (50–100) combined with a wide `spread` (6–8) performs *worse* than a tight spread at the same inventory cap, dropping as low as −227 mean P&L. The likely mechanism: `MarketMaker`'s quote skew scales with `spread`, so a wide spread means large skew swings as inventory approaches its cap — a moderate cap gets pinned there often enough for that miscalibration to bite, whereas a low cap bounds the damage and a high cap rarely gets pinned at all. That's a hypothesis based on the pattern, not fully verified — a good candidate for further digging.
 
 ## Example output
 
