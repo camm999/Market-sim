@@ -8,10 +8,11 @@ A limit order book (LOB) simulator written from scratch in Python — the matchi
 
 - **Matching engine** (`lob/book.py`) — limit and market orders, price-time priority, partial fills, cancellation. Best bid/ask lookup is heap-based (`O(log n)` amortized) rather than scanning every price level.
 - **Random order flow** (`simulator/random_flow.py`) — Poisson-style arrivals of random limit/market orders around the mid price, to simulate a live market.
-- **Market maker** (`simulator/market_maker.py`) — quotes a bid and ask around mid every step, tracks its own inventory/cash, and skews its quotes against inventory to manage risk.
+- **Market maker** (`simulator/market_maker.py`) — quotes a bid and ask around mid every step, tracks its own inventory/cash, skews its quotes against inventory to manage risk, and widens its spread with recent realized volatility (rolling stdev of trade prices) so it quotes tighter in a calm market and pulls back in a choppy one.
 - **Imbalance trader** (`simulator/imbalance_trader.py`) — a contrasting agent that trades *with* the book's imbalance instead of against its own inventory.
 - **Metrics** (`metrics/metrics.py`) — tracks mid price, spread, depth, and order book imbalance over a run, and plots them.
 - **Depth heatmap** (`metrics/depth_history.py`) — records resting size at every price level relative to mid, each step, and renders it as an L2-style heatmap over time.
+- **P&L breakdown** (`metrics/pnl_history.py`) — splits `MarketMaker`'s P&L into spread capture vs. inventory risk every step, and plots them, so a profitable-looking total can't hide getting picked off by informed flow.
 - **Tests** (`tests/`) — pytest unit tests covering matching, price-time priority, partial fills, cancellation, and both agents; mypy runs in CI alongside pytest.
 - **Benchmarks** (`benchmarks/`) — measures the heap-based best bid/ask lookup against the naive scan it replaced.
 - **Strategy comparison** (`analysis/compare_strategies.py`) — runs the simulation across many random seeds and statistically compares `MarketMaker` vs `ImbalanceTrader` P&L, instead of judging either off a single run.
@@ -29,12 +30,14 @@ market_sim/
 │   └── imbalance_trader.py      # imbalance-following agent
 ├── metrics/
 │   ├── metrics.py                # metrics tracking + plotting
-│   └── depth_history.py         # per-step depth snapshots + heatmap
+│   ├── depth_history.py         # per-step depth snapshots + heatmap
+│   └── pnl_history.py           # spread vs. inventory P&L tracking + plotting
 ├── tests/
 │   ├── test_book.py             # matching engine tests
 │   ├── test_market_maker.py
 │   ├── test_imbalance_trader.py
 │   ├── test_depth_history.py
+│   ├── test_pnl_history.py
 │   ├── test_compare_strategies.py
 │   └── test_tune_market_maker.py
 ├── benchmarks/
@@ -78,6 +81,21 @@ When a new order arrives, the exchange checks whether its price is good enough t
 ## How the market maker works
 
 A market maker doesn't bet on direction — it continuously posts both a bid and an ask around the current price, earning the spread on round trips. In exchange for supplying that liquidity, it absorbs inventory risk: every fill pushes its position long or short, so `MarketMaker` skews its quotes against its own inventory (long → quote lower, short → quote higher) to lean back toward flat instead of letting risk build up unbounded, and stops adding to a side once a configurable `max_inventory` limit is hit.
+
+The quoted width isn't fixed either. Each step, `MarketMaker` computes realized volatility as the population stdev of the last `vol_window` trade prices, and widens its base `spread` by `vol_coef * volatility` before splitting it into a half-spread on each side. A calm, range-bound market gets tight quotes; a choppy one gets wider ones, which both protects against getting picked off by a stale quote in a fast-moving market and earns a bigger spread to compensate for the extra risk of holding inventory through it. Since inventory skew is computed as a fraction of that same half-spread, volatility widening also amplifies the skew — a deliberate choice consistent with the rest of the design, not a side effect (see the "danger zone" in the tuning section below for what happens when that interaction is miscalibrated). `vol_coef=0` recovers the original fixed-spread behavior. This is a naive first cut at the idea behind the Avellaneda-Stoikov market-making model — a fuller implementation would also reason about time-to-horizon and risk aversion explicitly rather than folding everything into one linear skew term.
+
+### Where the P&L actually comes from
+
+A single `mark_to_market()` number can't tell you *why* a run made or lost money — a healthy strategy earning the spread and an unhealthy one that got lucky on a directional move can post the same total. `MarketMaker` splits its P&L into two running totals that always sum to the total:
+
+- **`spread_pnl`** — the edge captured on each fill, priced against the mid the quote was centered on at the moment it was posted. Selling above that mid or buying below it is pure liquidity-provision profit, independent of whatever the price does afterwards.
+- **`inventory_pnl(book)`** — everything else: the mark-to-market gain or loss on whatever's been carried since each fill, as fair value has drifted since then. This is the cost (or, occasionally, the windfall) of holding directional risk instead of staying flat.
+
+`metrics/pnl_history.py` (`PnLHistory`) records both every step and plots them alongside the total, wired into `simulate_random_flow` the same way as `DepthHistory`. Running `main.py` saves this to `pnl_breakdown.png`:
+
+![P&L breakdown](pnl_breakdown.png)
+
+In this run, `spread_pnl` climbs steadily and almost monotonically — the quoting logic reliably earns its edge — while `inventory_pnl` trends negative and gets worse over the run, dragging down what would otherwise be a much larger total. That's the picture of a market maker doing its core job correctly (capturing the spread) while losing money on the side effect of doing that job (carrying inventory through directional moves) — exactly the failure mode `analysis/tune_market_maker.py` traced to `max_inventory` being pinned too readily during trending runs. Without this split, the total P&L alone would just look mediocre; with it, it's clear *which half* of the strategy needs work.
 
 ## Performance
 
