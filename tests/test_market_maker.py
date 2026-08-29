@@ -206,3 +206,27 @@ def test_inventory_pnl_reflects_price_moves_after_the_fill():
     assert total == mm.cash + mm.inventory * 90  # short 5, price fell -> gain
     assert mm.inventory_pnl(other_book) == total - mm.spread_pnl
     assert mm.spread_pnl + mm.inventory_pnl(other_book) == total
+
+
+def test_skew_coef_zero_disables_inventory_skew():
+    book = make_book()
+    mm = MarketMaker(spread=4, size=5, max_inventory=50, skew_coef=0.0)
+    mm.inventory = 25  # would normally skew quotes down; skew_coef=0 should cancel that out
+
+    mm.quote(book)
+
+    # half=2, skew=0 regardless of inventory, mid falls back to 100 on an empty book
+    assert book.snapshot()["bids"] == {98: 5}
+    assert book.snapshot()["asks"] == {102: 5}
+
+
+def test_skew_coef_scales_inventory_skew():
+    book = make_book()
+    mm = MarketMaker(spread=8, size=5, max_inventory=50, skew_coef=0.5)
+    mm.inventory = 25  # halfway to the risk limit
+
+    mm.quote(book)
+
+    # half=4, skew = 0.5 * (25/50) * 4 = 1.0 (half the skew the default skew_coef=1.0 would give)
+    assert book.snapshot()["bids"] == {95: 5}
+    assert book.snapshot()["asks"] == {103: 5}

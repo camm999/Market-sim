@@ -55,3 +55,18 @@ def test_update_appends_one_frame_per_call():
     history.update(mm, book)
 
     assert len(history.total_pnl) == 3
+
+
+def test_update_records_inventory_each_step():
+    book = make_book()
+    mm = MarketMaker(spread=2, size=5, max_inventory=50)
+    history = PnLHistory()
+
+    mm.quote(book)  # mid=100, posts bid 99x5, ask 101x5
+    history.update(mm, book)  # inventory still 0, nothing filled yet
+
+    book.add_market_order("buy", 5)  # sweeps our ask @ 101
+    mm.quote(book)  # settles the fill: inventory becomes -5
+    history.update(mm, book)
+
+    assert history.inventory == [0, -5]

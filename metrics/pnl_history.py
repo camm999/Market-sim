@@ -25,12 +25,17 @@ class PnLHistory:
     separately shows whether a run's result came from genuinely earning
     the spread or from getting picked off by informed flow and then riding
     the position - something the total alone can't distinguish.
+
+    Also records raw `inventory` (position size, not P&L) each step, so a
+    caller can measure how fast a position mean-reverts back toward flat
+    after a shock, independent of what price did while it was open.
     """
 
     def __init__(self) -> None:
         self.spread_pnl: List[float] = []
         self.inventory_pnl: List[float] = []
         self.total_pnl: List[float] = []
+        self.inventory: List[int] = []
 
     def update(self, market_maker: MarketMaker, book: LimitOrderBook) -> None:
         spread = market_maker.spread_pnl
@@ -38,6 +43,7 @@ class PnLHistory:
         self.spread_pnl.append(spread)
         self.inventory_pnl.append(total - spread)
         self.total_pnl.append(total)
+        self.inventory.append(market_maker.inventory)
 
     def plot(self, save_path: Optional[str] = None) -> Figure:
         """Plot spread P&L, inventory P&L, and their total over the run."""

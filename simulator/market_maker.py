@@ -20,7 +20,9 @@ class MarketMaker:
     The quoted width isn't fixed either: it widens with recent realized
     volatility (the rolling stdev of the last `vol_window` trade prices),
     so it quotes tighter in a calm market and pulls back when prices start
-    whipping around.
+    whipping around. `skew_coef` scales how hard inventory skews the
+    quotes (0 disables it entirely) — a separate knob from `vol_coef`, so
+    the two can be tested independently.
 
     P&L is tracked in two pieces, not just as one mark-to-market total:
     `spread_pnl` is the edge captured on each fill relative to the mid the
@@ -41,6 +43,7 @@ class MarketMaker:
         max_inventory: int = 50,
         vol_window: int = 20,
         vol_coef: float = 1.0,
+        skew_coef: float = 1.0,
     ) -> None:
         self.next_order_id = order_id_start
         self.spread = spread  # base quoted width around mid, before volatility widening
@@ -48,6 +51,7 @@ class MarketMaker:
         self.max_inventory = max_inventory  # risk limit before a side stops quoting
         self.vol_window = vol_window  # how many recent trades realized volatility looks back over
         self.vol_coef = vol_coef  # spread added per unit of realized volatility
+        self.skew_coef = skew_coef  # multiplier on inventory-based quote skew; 0 disables it
 
         self.inventory = 0  # net position: +long, -short
         self.cash = 0.0  # running cash flow from fills
@@ -134,7 +138,7 @@ class MarketMaker:
         effective_spread = self.spread + self.vol_coef * volatility
         half = effective_spread / 2
         # Skew: positive inventory nudges both quotes down so we sell rather than buy more.
-        skew = (self.inventory / self.max_inventory) * half if self.max_inventory else 0
+        skew = self.skew_coef * (self.inventory / self.max_inventory) * half if self.max_inventory else 0
         bid_price = round(mid - half - skew)
         ask_price = round(mid + half - skew)
 

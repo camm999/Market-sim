@@ -5,6 +5,7 @@ from metrics.depth_history import DepthHistory
 from metrics.pnl_history import PnLHistory
 from simulator.market_maker import MarketMaker
 from simulator.imbalance_trader import ImbalanceTrader
+from simulator.informed_trader import InformedTrader
 import random
 import time
 
@@ -40,6 +41,7 @@ def simulate_random_flow(
     metrics: Optional[Metrics] = None,
     market_maker: Optional[MarketMaker] = None,
     imbalance_trader: Optional[ImbalanceTrader] = None,
+    informed_trader: Optional[InformedTrader] = None,
     depth_history: Optional[DepthHistory] = None,
     pnl_history: Optional[PnLHistory] = None,
 ) -> Metrics:
@@ -51,6 +53,7 @@ def simulate_random_flow(
     metrics: optional Metrics instance to record into; created if not passed
     market_maker: optional MarketMaker that re-quotes around mid every step
     imbalance_trader: optional ImbalanceTrader that trades with strong imbalance
+    informed_trader: optional InformedTrader that trades a fixed schedule of directional windows
     depth_history: optional DepthHistory to record a per-step depth snapshot into
     pnl_history: optional PnLHistory to record market_maker's P&L split each step
         (requires market_maker to also be passed)
@@ -68,6 +71,9 @@ def simulate_random_flow(
 
         if imbalance_trader is not None:
             imbalance_trader.act(book)
+
+        if informed_trader is not None:
+            informed_trader.act(book)
 
         # Poisson arrival: decide what type of order arrives
         r = random.random()
