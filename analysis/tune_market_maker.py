@@ -83,7 +83,7 @@ def plot(
     results: List[SweepResult],
     spreads: Sequence[float] = SPREADS,
     max_inventories: Sequence[int] = MAX_INVENTORIES,
-    save_path: str = "market_maker_tuning.png",
+    save_path: str = "images/market_maker_tuning.png",
 ) -> Figure:
     by_key = {(r.spread, r.max_inventory): r.mean_pnl for r in results}
     grid = np.array([[by_key[(s, m)] for m in max_inventories] for s in spreads])
@@ -110,4 +110,4 @@ if __name__ == "__main__":
     results = sweep()
     summarize(results)
     plot(results)
-    print("\nSaved market_maker_tuning.png")
+    print("\nSaved images/market_maker_tuning.png")

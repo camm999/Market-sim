@@ -21,7 +21,7 @@ def main():
     metrics = simulate_random_flow(
         book,
         steps=500,
-        sleep=0.01,
+        sleep=0,
         market_maker=mm,
         imbalance_trader=it,
         depth_history=depth_history,
@@ -38,14 +38,14 @@ def main():
         f"mark_to_market={it.mark_to_market(book):.2f}"
     )
 
-    metrics.plot(save_path="simulation.png")
-    print("Saved metrics plot to simulation.png")
+    metrics.plot(save_path="images/simulation.png")
+    print("Saved metrics plot to images/simulation.png")
 
-    depth_history.plot(save_path="depth_heatmap.png")
-    print("Saved depth heatmap to depth_heatmap.png")
+    depth_history.plot(save_path="images/depth_heatmap.png")
+    print("Saved depth heatmap to images/depth_heatmap.png")
 
-    pnl_history.plot(save_path="pnl_breakdown.png")
-    print("Saved P&L breakdown plot to pnl_breakdown.png")
+    pnl_history.plot(save_path="images/pnl_breakdown.png")
+    print("Saved P&L breakdown plot to images/pnl_breakdown.png")
 
 
 if __name__ == "__main__":

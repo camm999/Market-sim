@@ -143,7 +143,7 @@ def summarize(results: List[GridResult]) -> None:
         )
 
 
-def plot_grid(results: List[GridResult], save_path: str = "stress_test_grid.png") -> Figure:
+def plot_grid(results: List[GridResult], save_path: str = "images/stress_test_grid.png") -> Figure:
     """Bar charts of mean drawdown and mean post-window |inventory|, one bar
     per (vol_coef, skew_coef) config, so the two questions Phase 3 asks are
     each answerable from a single glance."""
@@ -199,7 +199,7 @@ def run_demo_scenario(
 def plot_demo_scenario(
     history: PnLHistory,
     schedule: List[Tuple[int, int, Side]] = DEFAULT_SCHEDULE,
-    save_path: str = "informed_trader_demo.png",
+    save_path: str = "images/informed_trader_demo.png",
 ) -> Figure:
     """P&L split over time with the informed windows shaded - the direct
     'watch inventory_pnl go negative' visual."""
@@ -227,7 +227,7 @@ if __name__ == "__main__":
     mm, demo_history = run_demo_scenario()
     plot_demo_scenario(demo_history)
     print(
-        f"informed_trader_demo.png saved. Final MarketMaker: "
+        f"images/informed_trader_demo.png saved. Final MarketMaker: "
         f"spread_pnl={mm.spread_pnl:.2f}, inventory_pnl={demo_history.inventory_pnl[-1]:.2f}"
     )
 
@@ -235,4 +235,4 @@ if __name__ == "__main__":
     results = sweep()
     summarize(results)
     plot_grid(results)
-    print("\nSaved stress_test_grid.png")
+    print("\nSaved images/stress_test_grid.png")

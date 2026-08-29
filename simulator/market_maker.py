@@ -95,6 +95,18 @@ class MarketMaker:
             return 0.0
         return statistics.pstdev(recent_prices)
 
+    def _compute_quote_prices(self, book: LimitOrderBook, mid: float) -> Tuple[int, int]:
+        """Bid/ask around mid: base spread widened by recent volatility, then
+        skewed against inventory. Split out from `quote()` so a subclass can
+        swap in a different quoting model (e.g. Avellaneda-Stoikov) while
+        reusing all the settle/cancel/repost/P&L plumbing unchanged."""
+        volatility = self._realized_volatility(book)
+        effective_spread = self.spread + self.vol_coef * volatility
+        half = effective_spread / 2
+        # Skew: positive inventory nudges both quotes down so we sell rather than buy more.
+        skew = self.skew_coef * (self.inventory / self.max_inventory) * half if self.max_inventory else 0
+        return round(mid - half - skew), round(mid + half - skew)
+
     def mark_to_market(self, book: LimitOrderBook) -> float:
         """Cash plus the value of current inventory at the current mid price."""
         mid = book.mid_price() or 0
@@ -132,15 +144,7 @@ class MarketMaker:
         if mid is None:
             return
 
-        # Widen the base spread with recent realized volatility, so quotes pull back
-        # from the market instead of getting run over during a choppy patch.
-        volatility = self._realized_volatility(book)
-        effective_spread = self.spread + self.vol_coef * volatility
-        half = effective_spread / 2
-        # Skew: positive inventory nudges both quotes down so we sell rather than buy more.
-        skew = self.skew_coef * (self.inventory / self.max_inventory) * half if self.max_inventory else 0
-        bid_price = round(mid - half - skew)
-        ask_price = round(mid + half - skew)
+        bid_price, ask_price = self._compute_quote_prices(book, mid)
 
         if self.inventory < self.max_inventory:
             order = Order(self._new_id(), "buy", bid_price, self.size)

@@ -78,7 +78,7 @@ def summarize(results: List[RunResult]) -> None:
     )
 
 
-def plot(results: List[RunResult], save_path: str = "strategy_comparison.png") -> Figure:
+def plot(results: List[RunResult], save_path: str = "images/strategy_comparison.png") -> Figure:
     mm_pnls = [r.market_maker_pnl for r in results]
     it_pnls = [r.imbalance_trader_pnl for r in results]
 
@@ -109,4 +109,4 @@ if __name__ == "__main__":
     results = run_sweep(n_runs=200, steps=500)
     summarize(results)
     plot(results)
-    print("\nSaved strategy_comparison.png")
+    print("\nSaved images/strategy_comparison.png")
