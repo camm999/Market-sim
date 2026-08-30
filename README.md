@@ -21,6 +21,7 @@ A limit order book (LOB) simulator written from scratch in Python — the matchi
 - **Adverse selection stress test** (`analysis/stress_test_market_maker.py`) — runs `MarketMaker` against an `InformedTrader` with known future drift windows, watches `inventory_pnl` take the hit live, and sweeps volatility widening and inventory skew on/off to check whether either actually protects against it.
 - **Avellaneda-Stoikov market maker** (`simulator/avellaneda_stoikov.py`) — a second market-making agent quoting from the actual Avellaneda-Stoikov (2008) optimal-quoting model (a reservation price derived from inventory, risk aversion, variance, and time-to-horizon) instead of `MarketMaker`'s hand-tuned linear heuristic.
 - **Avellaneda-Stoikov comparison** (`analysis/avellaneda_stoikov_demo.py`) — runs both market makers through the same informed-trader stress scenario and plots the head-to-head P&L split, plus the reservation price/half-spread compressing toward the trading horizon within a single run.
+- **Interactive dashboard** (`streamlit_app.py`) — a Streamlit UI over the same simulation code, so parameters like `spread`/`max_inventory`/`gamma`/`k` can be tweaked and re-run live instead of only via `main.py`'s static PNG output.
 
 ## Project structure
 
@@ -58,6 +59,7 @@ market_sim/
 │   └── avellaneda_stoikov_demo.py  # heuristic vs. Avellaneda-Stoikov comparison
 ├── images/                       # generated charts (all scripts above save here)
 ├── main.py                       # demo entry point
+├── streamlit_app.py              # interactive dashboard
 ├── requirements.txt
 └── diary.md                      # dev log
 ```
@@ -72,6 +74,16 @@ python main.py
 ```
 
 `main.py` runs a short manual demo — placing, matching, and cancelling orders — then a 500-step random-flow simulation with both agents active, saving a chart of mid price / spread / imbalance to `images/simulation.png` and a depth heatmap to `images/depth_heatmap.png`.
+
+## Interactive dashboard
+
+```bash
+streamlit run streamlit_app.py
+```
+
+`streamlit_app.py` wraps `simulate_random_flow` in a UI: pick `MarketMaker` or `AvellanedaStoikovMarketMaker`, adjust its parameters (`spread`/`vol_coef`/`skew_coef`, or `gamma`/`k`), optionally add the imbalance trader and the informed-trader stress scenario, and re-run live — the same charts (`Metrics`, `DepthHistory`, `PnLHistory`) `main.py` saves as static PNGs render inline instead. It's a thin layer with no simulation logic of its own; every control maps directly to an existing constructor argument.
+
+A **"Use best known parameters"** button loads whichever model is selected with the best-scoring cell found by that model's own multi-seed tuning sweep (`spread=8, max_inventory=10` for `MarketMaker` from `analysis/tune_market_maker.py`; `gamma=0.00002, k=1.0` for `AvellanedaStoikovMarketMaker` from `analysis/tune_avellaneda_stoikov.py`) instead of leaving you to remember or re-look-up those numbers.
 
 ## Running tests
 
