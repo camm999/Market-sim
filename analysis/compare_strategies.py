@@ -1,9 +1,10 @@
 # analysis/compare_strategies.py
 """
-Runs the simulation across many random seeds and statistically compares
+runs the simulation across many random seeds and statistically compares
 MarketMaker vs AvellanedaStoikovMarketMaker vs ImbalanceTrader performance
-(mark-to-market P&L), instead of judging any agent off a single anecdotal
-run.
+(mark-to-market P&L)
+
+Anchored to a GARCH(1,1)/ Student-t GBM price path
 
 Run (from the project root): python -m analysis.compare_strategies
 """
@@ -20,7 +21,8 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
 from lob.book import LimitOrderBook
-from simulator.random_flow import simulate_random_flow
+from simulator.gbm_flow import generate_garch_gbm_path
+from simulator.historical_flow import simulate_historical_flow
 from simulator.market_maker import MarketMaker
 from simulator.avellaneda_stoikov import AvellanedaStoikovMarketMaker
 from simulator.imbalance_trader import ImbalanceTrader
@@ -40,32 +42,35 @@ def run_once(seed: int, steps: int = 500) -> RunResult:
     reproducible regardless of how many other runs happened before it.
 
     MarketMaker and AvellanedaStoikovMarketMaker each get their own
-    simulation rather than sharing one book: simulate_random_flow only ever
-    quotes one market_maker per run, and since each MM's own resting quotes
-    shape the book (see AvellanedaStoikovMarketMaker's docstring), a shared
-    book wouldn't actually be a fair shared comparison anyway. Reseeding to
-    the same seed before each keeps the *input* order flow identical
-    between them; the *realized* flow still diverges once each MM starts
-    quoting differently - the same caveat analysis/avellaneda_stoikov_demo.py
+    simulation rather than sharing one book: simulate_historical_flow only
+    ever quotes one market_maker per run, and since each MM's own resting
+    quotes shape the book (see AvellanedaStoikovMarketMaker's docstring), a
+    shared book wouldn't actually be a fair shared comparison anyway. Both
+    runs are anchored to the *same* GBM price path generated from this
+    seed, so the fair-value process is identical between them; the
+    *realized* order flow still diverges once each MM starts quoting
+    differently - the same caveat analysis/avellaneda_stoikov_demo.py
     already flags for its own head-to-head comparison. ImbalanceTrader's
     reported P&L comes from the MarketMaker run specifically, for the same
     reason - it isn't quoting into an identical book across both runs
     either, so a single reference figure is more honest than two divergent
     ones under one label.
     """
+    prices = generate_garch_gbm_path(steps, seed)
+
     random.seed(seed)
     book = LimitOrderBook()
     mm = MarketMaker(spread=2, size=5, max_inventory=50)
     it = ImbalanceTrader(threshold=0.4, size=5, max_inventory=50)
-    with contextlib.redirect_stdout(io.StringIO()):  # simulate_random_flow prints progress; silence it here
-        simulate_random_flow(book, steps=steps, sleep=0, market_maker=mm, imbalance_trader=it)
+    with contextlib.redirect_stdout(io.StringIO()):  # simulate_historical_flow prints progress; silence it here
+        simulate_historical_flow(book, prices, market_maker=mm, imbalance_trader=it)
 
     random.seed(seed)
     as_book = LimitOrderBook()
     as_mm = AvellanedaStoikovMarketMaker(size=5, max_inventory=50, total_steps=steps)
     as_it = ImbalanceTrader(threshold=0.4, size=5, max_inventory=50)
     with contextlib.redirect_stdout(io.StringIO()):
-        simulate_random_flow(as_book, steps=steps, sleep=0, market_maker=as_mm, imbalance_trader=as_it)
+        simulate_historical_flow(as_book, prices, market_maker=as_mm, imbalance_trader=as_it)
 
     return RunResult(
         seed=seed,

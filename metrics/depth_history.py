@@ -1,5 +1,5 @@
 # metrics/depth_history.py
-"""Records order book depth over time and renders it as an L2-style heatmap."""
+"""records order book depth over time and renders it as an L2-style heatmap."""
 
 from typing import List, Optional
 
@@ -12,15 +12,14 @@ from lob.book import LimitOrderBook
 
 class DepthHistory:
     """
-    Tracks resting size at each price level, relative to the mid price, at
-    every step of a simulation. Unlike Metrics (which tracks scalar summary
-    stats like total depth), this keeps a full per-level snapshot each step
-    so it can be rendered as a heatmap of the book's shape over time.
+    tracks resting size at each price level, relative to the mid price, at
+    every step of a simulation. Unlike Metrics,
+     this keeps a full per-level snapshot each step
+    so it can be displayed as books depth heatmap over time. 
 
-    Prices are stored as an *offset from mid* rather than an absolute price,
-    since mid drifts over a run (random walk) - a fixed absolute price grid
-    would either be wastefully wide or miss levels once price has moved.
-    Offsets outside +/-offset_range are dropped; the default is wide enough
+    prices are stored as an *offset from mid* rather than an absolute price,
+    since mid drifts over a run (random walk)
+    offsets outside +/-offset_range are dropped; the default is wide enough
     to hold everything this project's agents actually quote at.
     """
 
@@ -29,9 +28,9 @@ class DepthHistory:
         self.frames: List[np.ndarray] = []
 
     def update(self, book: LimitOrderBook) -> None:
-        """Snapshot resting depth by price offset from mid. Bids are stored
-        as positive size, asks as negative size, so a single heatmap can
-        show both sides with a diverging (green/red) colormap."""
+        """snapshot  resting depth by price offset from mid. Bids are 
+         positive size, asks as negative size, so a single heatmap can
+        show colormap."""
         mid = book.mid_price()
         width = 2 * self.offset_range + 1
         frame = np.zeros(width)
@@ -49,7 +48,7 @@ class DepthHistory:
         self.frames.append(frame)
 
     def plot(self, save_path: Optional[str] = None) -> Figure:
-        """Render the recorded frames as a time x price-offset heatmap."""
+        """render the recorded frames as a time x price-offset heatmap."""
         data = np.array(self.frames).T  # rows: price offset, columns: step
 
         fig, ax = plt.subplots(figsize=(12, 6))

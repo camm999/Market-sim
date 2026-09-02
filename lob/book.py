@@ -49,7 +49,7 @@ class LimitOrderBook:
         return None
 
     def add_limit_order(self, order: Order) -> None:
-        """Add a limit order to the book or match it if marketable."""
+        """add a limit order to the book or match it if marketable."""
         self.order_index[order.id] = (
             order.side,
             order.price,
@@ -143,7 +143,7 @@ class LimitOrderBook:
         # match until size is gone
 
     def _market_buy(self, size: int) -> None:
-        """Market buy: hit best asks until size is gone or no asks remain."""
+        """market buy, hit best asks until size is gone or no asks remain."""
         while size > 0 and self.asks:
             best_ask = self._best_ask()
             assert (
@@ -184,7 +184,7 @@ class LimitOrderBook:
                     del self.bids[best_bid]
 
     def cancel_order(self, order_id: int) -> Optional[bool]:
-        """Cancel an existing resting order by ID."""
+        """cancel an existing resting order by ID."""
         if order_id not in self.order_index:
             print("order not found or already filled")
             return None
@@ -220,13 +220,13 @@ class LimitOrderBook:
         best_bid = self._best_bid() if self.bids else None
         best_ask = self._best_ask() if self.asks else None
 
-        # If both sides exist → normal mid
+        # if both sides exist → normal mid
         if best_bid is not None and best_ask is not None:
             mid = (best_bid + best_ask) / 2
             self.last_mid = mid
             return mid
 
-        # If only one side exists → use that as mid
+        # if only one side exists → use that as mid
         if best_bid is not None:
             self.last_mid = best_bid
             return best_bid
@@ -235,7 +235,7 @@ class LimitOrderBook:
             self.last_mid = best_ask
             return best_ask
 
-        # If book is empty → fallback to last mid or 100
+        # if book empty → fallback to last mid or 100
         if self.last_mid is not None:
             return self.last_mid
 

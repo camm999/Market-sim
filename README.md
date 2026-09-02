@@ -4,26 +4,29 @@
 
 A limit order book (LOB) simulator written from scratch in Python — the matching engine, random order flow, two contrasting trading agents, and metrics tracking, with a pytest suite and mypy checking the core engine.
 
-## Features
+A python made limit order book written from scratch, features below. All confirmed by a pytest suite and mypy checking the engine.
 
-- **Matching engine** (`lob/book.py`) — limit and market orders, price-time priority, partial fills, cancellation. Best bid/ask lookup is heap-based (`O(log n)` amortized) rather than scanning every price level.
-- **Random order flow** (`simulator/random_flow.py`) — Poisson-style arrivals of random limit/market orders around the mid price, to simulate a live market.
-- **Market maker** (`simulator/market_maker.py`) — quotes a bid and ask around mid every step, tracks its own inventory/cash, skews its quotes against inventory to manage risk, and widens its spread with recent realized volatility (rolling stdev of trade prices) so it quotes tighter in a calm market and pulls back in a choppy one.
-- **Imbalance trader** (`simulator/imbalance_trader.py`) — a contrasting agent that trades *with* the book's imbalance instead of against its own inventory.
-- **Informed trader** (`simulator/informed_trader.py`) — fed a ground-truth schedule of future price-drift windows and trades directionally while one is active, injecting real adverse selection into the sim instead of relying on incidental noise from the random flow.
-- **Metrics** (`metrics/metrics.py`) — tracks mid price, spread, depth, and order book imbalance over a run, and plots them.
-- **Depth heatmap** (`metrics/depth_history.py`) — records resting size at every price level relative to mid, each step, and renders it as an L2-style heatmap over time.
-- **P&L breakdown** (`metrics/pnl_history.py`) — splits `MarketMaker`'s P&L into spread capture vs. inventory risk every step, and plots them, so a profitable-looking total can't hide getting picked off by informed flow.
-- **Tests** (`tests/`) — pytest unit tests covering matching, price-time priority, partial fills, cancellation, and both agents; mypy runs in CI alongside pytest.
-- **Benchmarks** (`benchmarks/`) — measures the heap-based best bid/ask lookup against the naive scan it replaced.
-- **Strategy comparison** (`analysis/compare_strategies.py`) — runs the simulation across many random seeds and statistically compares `MarketMaker` vs `ImbalanceTrader` P&L, instead of judging either off a single run.
-- **Market maker tuning** (`analysis/tune_market_maker.py`) — sweeps `MarketMaker`'s `spread`/`max_inventory` across a grid to check whether its underperformance in the strategy comparison is a tuning problem or something structural.
-- **Avellaneda-Stoikov tuning** (`analysis/tune_avellaneda_stoikov.py`) — the same question for `AvellanedaStoikovMarketMaker`'s own knobs, sweeping `gamma`/`k` across a grid instead, since they don't map onto the same axes as `MarketMaker`'s.
-- **Adverse selection stress test** (`analysis/stress_test_market_maker.py`) — runs `MarketMaker` against an `InformedTrader` with known future drift windows, watches `inventory_pnl` take the hit live, and sweeps volatility widening and inventory skew on/off to check whether either actually protects against it.
-- **Avellaneda-Stoikov market maker** (`simulator/avellaneda_stoikov.py`) — a second market-making agent quoting from the actual Avellaneda-Stoikov (2008) optimal-quoting model (a reservation price derived from inventory, risk aversion, variance, and time-to-horizon) instead of `MarketMaker`'s hand-tuned linear heuristic.
-- **Avellaneda-Stoikov comparison** (`analysis/avellaneda_stoikov_demo.py`) — runs both market makers through the same informed-trader stress scenario and plots the head-to-head P&L split, plus the reservation price/half-spread compressing toward the trading horizon within a single run.
-- **Interactive dashboard** (`streamlit_app.py`) — a Streamlit UI over the same simulation code, so parameters like `spread`/`max_inventory`/`gamma`/`k` can be tweaked and re-run live instead of only via `main.py`'s static PNG output.
-- **Real historical data backtest** (`simulator/historical_flow.py`, `analysis/historical_backtest.py`) — anchors synthetic order flow to a real BTCUSDT price series instead of a random walk, so the fair-value process is genuinely exogenous rather than a product of the sim's own order flow.
+## Features (see commits for updates on these)
+
+- **Matching engine** (`lob/book.py`) — limit and market orders, price-time priority, partial fills, cancellation. Best bid/ask lookup is heap-based (`O(log n)` amortized) rather than scanning every price level. Also has a heap-based lookup ('O(log n) amortized), see 'performance'.
+- **Random order flow** (`simulator/random_flow.py`) — Poisson  arrivals of random limit/market orders around the mid price allows simulated 'live' market
+- **Market maker** (`simulator/market_maker.py`) — Quotes a bid and ask around mid every step and tracks its own inventory/cash. It also skews its quotes against inventory to manage risk, and widens its spread with recent realized volatility ,rolling standard deviation of *trade prices*, i.e it quotes tighter in a calm market and pulls back in a choppy one
+- **Imbalance trader** (`simulator/imbalance_trader.py`) — An opposing agent that trades *with* the book's imbalance instead of personal inventory.
+- **Informed trader** (`simulator/informed_trader.py`) — Given a schedule of future price-drift windows and actively trades during these windows when active. This mimicks competitors in the market who may have an edge. Also gives the market direction, rather than noise from flows.
+- **Metrics** (`metrics/metrics.py`) — tracks the mid price, spread, depth, and order book imbalance over a given run, and plots them, used for analysis.
+- **GBM-anchored tuning** (`simulator/gbm_flow.py`) — generates a synthetic exogenous price path per seed (GARCH(1,1) variance process, Student-t innovations fat tails and volatility clustering calibrated off `data/btcusdt_1m.csv`), reused by `compare_strategies.py`/`tune_market_maker.py`/`tune_avellaneda_stoikov.py` so grid sweeps aren't scored against a price their own agent's quotes helped produce. Also generates a scheduled-drift variant for `stress_test_market_maker.py`/`avellaneda_stoikov_demo.py`, with drift switched on only during `InformedTrader`'s own known windows.
+- **Depth heatmap** (`metrics/depth_history.py`) — records resting size at every price level to the relative mid, at that step, it then outputs an L2 heatmap.
+- **P&L breakdown** (`metrics/pnl_history.py`) —  Splits `MarketMaker`'s P&L into spread P&L and inventory P&L, reveals impact of informed flow trader windows on the market maker.
+- **Tests** (`tests/`) — pytest unit tests all code files.
+- **Benchmarks** (`benchmarks/`) — measures look-up speeds investigated.
+- **Strategy comparison** (`analysis/compare_strategies.py`) — statistically compares `MarketMaker` vs `ImbalanceTrader` P&L via averaging across seeds.
+- **Market maker tuning** (`analysis/tune_market_maker.py`) — sweeps `MarketMaker`'s `spread`/`max_inventory` across a grid to evaluate on the above outcome. **No informed trader**
+- **Adverse selection stress test** (`analysis/stress_test_market_maker.py`) — runs `MarketMaker` against the `InformedTrader` with known future drift windows,plots show inventory P&L hit and a grid sweep to see impact of volatility widening and turning inventory skew on/off.
+- **Avellaneda-Stoikov market maker** (`simulator/avellaneda_stoikov.py`) — A second market making agent following the strategdy given in the paper 'High Frequency Trading in a Limit Order Book' (2008), recommended read, this gives the agent a reservation price derived from inventory, risk aversion, variance, and time-to-horizon instead of `MarketMaker`'s hand-tuned linear heuristic.
+- **Avellaneda-Stoikov comparison** (`analysis/avellaneda_stoikov_demo.py`) — runs both market makers through the *same* informed-trader stress scenario and tracks P&L as well as the reservation price/half-spread compressing toward the trading horizon.
+- **Avellaneda-Stoikov tuning** (`analysis/tune_avellaneda_stoikov.py`) — Optimises parameters for this agent sweeping `gamma`/`k` across a grid instead, since they don't map onto the same axes as `MarketMaker`'s. **No informed trader**
+- **Interactive dashboard** (`streamlit_app.py`) — a Streamlit UI over the same simulation code, so parameters like `spread`/`max_inventory`/`gamma`/`k` can be changed, allows for model tweaking and testing results above.
+- **Real historical data backtest** (`simulator/historical_flow.py`, `analysis/historical_backtest.py`) — anchors synthetic order flow to a real BTCUSDT price series instead of a random walk, so fair-value is imposed externally and none of the agents can influence it.
 
 ## Project structure
 
@@ -37,13 +40,14 @@ market_sim/
 │   ├── imbalance_trader.py      # imbalance-following agent
 │   ├── informed_trader.py       # scheduled-drift agent for adverse-selection testing
 │   ├── avellaneda_stoikov.py    # Avellaneda-Stoikov optimal-quoting market maker
-│   └── historical_flow.py       # order flow anchored to a real historical price series
+│   ├── historical_flow.py       # order flow anchored to a real historical price series
+│   └── gbm_flow.py              # synthetic exogenous price path generator (GARCH(1,1)/Student-t GBM)
 ├── metrics/
 │   ├── metrics.py                # metrics tracking + plotting
 │   ├── depth_history.py         # per-step depth snapshots + heatmap
 │   └── pnl_history.py           # spread vs. inventory P&L tracking + plotting
 ├── tests/
-│   ├── test_book.py             # matching engine tests
+│   ├── test_book.py             
 │   ├── test_market_maker.py
 │   ├── test_imbalance_trader.py
 │   ├── test_informed_trader.py
@@ -54,7 +58,8 @@ market_sim/
 │   ├── test_tune_market_maker.py
 │   ├── test_tune_avellaneda_stoikov.py
 │   ├── test_stress_test_market_maker.py
-│   └── test_historical_flow.py
+│   ├── test_historical_flow.py
+│   └── test_gbm_flow.py
 ├── benchmarks/
 │   └── bench_best_price.py      # best bid/ask lookup benchmark
 ├── analysis/
@@ -82,17 +87,14 @@ pip install -r requirements.txt
 python main.py
 ```
 
-`main.py` runs a short manual demo — placing, matching, and cancelling orders — then a 500-step random-flow simulation with both agents active, saving a chart of mid price / spread / imbalance to `images/simulation.png` and a depth heatmap to `images/depth_heatmap.png`.
+`main.py` runs a short manual demo; a 500-step random-flow simulation with both agents active, saving a chart of mid price / spread / imbalance to `images/simulation.png` and a depth heatmap to `images/depth_heatmap.png`. 
 
-## Interactive dashboard
+## Interactive dashboard - user explanation at bottom
 
 ```bash
 streamlit run streamlit_app.py
 ```
 
-`streamlit_app.py` wraps `simulate_random_flow` in a UI: pick `MarketMaker` or `AvellanedaStoikovMarketMaker`, adjust its parameters (`spread`/`vol_coef`/`skew_coef`, or `gamma`/`k`), optionally add the imbalance trader and the informed-trader stress scenario, and re-run live — the same charts (`Metrics`, `DepthHistory`, `PnLHistory`) `main.py` saves as static PNGs render inline instead. It's a thin layer with no simulation logic of its own; every control maps directly to an existing constructor argument.
-
-A **"Use best known parameters"** button loads whichever model is selected with the best-scoring cell found by that model's own multi-seed tuning sweep (`spread=8, max_inventory=10` for `MarketMaker` from `analysis/tune_market_maker.py`; `gamma=0.00002, k=1.0` for `AvellanedaStoikovMarketMaker` from `analysis/tune_avellaneda_stoikov.py`) instead of leaving you to remember or re-look-up those numbers.
 
 ## Running tests
 
@@ -103,49 +105,86 @@ python -m mypy lob simulator metrics analysis --ignore-missing-imports --explici
 
 ## How the order book works
 
-A limit order book (LOB) is the mechanism an electronic exchange uses to match buyers and sellers in real time. Every time a trader submits an order, the exchange doesn't magically "find a counterparty" — instead it places that order into the book, a structured list of all outstanding buy and sell interest.
 
-Buy orders (bids) are sorted so the highest bid represents the most someone is willing to pay, and sell orders (asks) are sorted so the lowest ask represents the cheapest someone is willing to sell. These two prices form the top of the book, and the difference between them is the **bid-ask spread**, a key measure of market liquidity.
-
-When a new order arrives, the exchange checks whether its price is good enough to trade immediately against the opposite side — this is called being **marketable**. A buy order priced above the best ask will instantly execute against the cheapest available sell orders. Trades always follow **price-time priority**: better prices match first, and among equal prices, older orders match before newer ones. If the incoming order isn't fully filled, whatever remains is added to the book at its limit price.
-
-`LimitOrderBook` stores bids and asks in dictionaries mapping price → FIFO queue, which enforces price-time priority. `_best_bid()`/`_best_ask()` identify the top of the book. When an order arrives through `add_limit_order()`, the book checks whether it's marketable and matches it inside `_match_buy()`/`_match_sell()`, reducing sizes on both sides and recording each trade. Fully filled resting orders are removed from their queues, and empty price levels are deleted. Any unfilled remainder is added to the book. `snapshot()` returns a summary of the current state — best bid/ask, depth at each price, and recent trades.
+The `LimitOrderBook` lists all outstanding buy orders *(bids)* and sell orders *(asks)* for an asset, sorted by price. The highest bid and lowest ask (`_best_bid()`/`_best_ask()`) form the top of book and their gap is the bid-ask spread. If an order is added (`add_limit_order()`) and its price crosses the spread (i.e., it's **marketable**), it trades immediately against the best-priced opposing orders (via `_match_buy()`/`_match_sell()`). Matching follows price-time priority, better prices go first, and out of these best prices, whoever arrived first gets filled first. Any unfilled portion of an order just gets added to the book to wait for a match. Users can also cancel unfilled orders.
 
 ## How the market maker works
 
-A market maker doesn't bet on direction — it continuously posts both a bid and an ask around the current price, earning the spread on round trips. In exchange for supplying that liquidity, it absorbs inventory risk: every fill pushes its position long or short, so `MarketMaker` skews its quotes against its own inventory (long → quote lower, short → quote higher) to lean back toward flat instead of letting risk build up unbounded, and stops adding to a side once a configurable `max_inventory` limit is hit.
+  
+The market maker posts a bid and ask *around the current price*, earning the *spread* on round trips **instead** of betting on direction. Every fill builds up **inventory risk**, so it skews its quotes to **lean back** toward flat, long implies lower quotes and short implies higher quotes, also has max inventory limit. The spread width is recalculated each step from **recent price volatility**. Wider spreads in volatile conditions **protect** against getting picked off by stale quotes and compensate for the extra inventory risk. Because inventory skew scales with that same spread, higher volatility also amplifies the skew, not a bug. Thus, Calmer markets get tighter quotes, choppier ones get wider quotes.
 
-The quoted width isn't fixed either. Each step, `MarketMaker` computes realized volatility as the population stdev of the last `vol_window` trade prices, and widens its base `spread` by `vol_coef * volatility` before splitting it into a half-spread on each side. A calm, range-bound market gets tight quotes; a choppy one gets wider ones, which both protects against getting picked off by a stale quote in a fast-moving market and earns a bigger spread to compensate for the extra risk of holding inventory through it. Since inventory skew is computed as a fraction of that same half-spread, volatility widening also amplifies the skew — a deliberate choice consistent with the rest of the design, not a side effect (see the "danger zone" in the tuning section below for what happens when that interaction is miscalibrated). `vol_coef=0` recovers the original fixed-spread behavior.
+## How the imbalance trader works
+
+This agent leans with the **book's imbalance**. When there's much more resting size on the bid than the ask, that pressure often precedes the price getting pushed up, so it hits the market with a buy to ride that move, vice versa for more ask's than bid's
+
 
 ### Limitations of the linear heuristic
 
-`vol_coef` and `skew_coef` are hand-picked, empirically tuned constants, not derived from anything. That's fine as a first cut, but it leaves real gaps compared to a principled quoting model like Avellaneda-Stoikov (2008) — implemented separately below:
+`vol_coef` and `skew_coef` are hand-picked, empirically tuned constants, not derived from anything. Its okay as a first try, but soon we will address these limitations by utilising a published research paper. 
 
-- **No time horizon.** `MarketMaker` behaves identically on step 1 and step 499 of a run — there's no notion of being less willing to carry risk as a trading session's end approaches.
-- **The two knobs can interact badly.** `vol_coef` and `skew_coef` were each reasonable in isolation, but the adverse-selection stress test above found they compound into a *worse* drawdown together — skew scales with the volatility-widened half-spread, amplifying exposure exactly when an informed trader is pushing inventory further from flat.
-- **Volatility is estimated from price levels, not increments.** `_realized_volatility` is the stdev of recent trade *prices*, a loose proxy — it isn't the variance of the price *process* a diffusion-based model actually needs.
-- **Inventory skew is capped by construction.** `skew_coef * (inventory / max_inventory) * half` can never exceed half the spread, regardless of how large or risky the position is; the cap falls out of the formula's shape, not a deliberate risk decision.
-- **No explicit risk-aversion parameter.** "How much do I hate carrying inventory" has no dedicated, interpretable knob — it's folded into `skew_coef` with no economic meaning attached.
+- **No time horizon.** `MarketMaker` no notion of heavy risk aversion as session comes to an end.
+- **Volatility is estimated from price levels, not increments.** `_realized_volatility` is the stdev of recent trade *prices*, meant to track the size of the random step not how far the level has drifted from where it started.
+- **Inventory skew is capped by construction.** `skew_coef * (inventory / max_inventory) * half` can never exceed half the spread, the cap falls out of the formula's shape, not deliberate.
+- **No explicit risk-aversion parameter.** "hatred for carrying inventory" has no dedicated measure,  it's folded into `skew_coef` with little to no meaning attached.
 - **The base spread has no market-microstructure grounding.** The fixed `spread` constant isn't tied to any model of how counterparty order-arrival likelihood falls off with quote distance; it's just picked.
 
-`AvellanedaStoikovMarketMaker` (`simulator/avellaneda_stoikov.py`) addresses each of these directly: an explicit `total_steps`/`t` horizon fixes the first; a single formula derived from inventory, risk aversion, variance, and time-to-horizon replaces the two independently-tuned knobs, fixing the second; a proper increment-based variance estimator fixes the third; the reservation-price skew `q·γ·σ²·(T-t)` falls out of the math rather than being capped, fixing the fourth; an explicit `gamma` parameter fixes the fifth; and the `k`-driven floor term ties the spread to a model of order-arrival decay, fixing the sixth. It's not a free lunch, though — `gamma` and `k` are still hand-picked for this toy sim rather than calibrated to real market data, and getting it to run stably in this particular simulator required its own new safeguard (see the class docstring and the section below).
 
-### Where the P&L actually comes from
+### Avellaneda-Stoikov market maker
 
-A single `mark_to_market()` number can't tell you *why* a run made or lost money — a healthy strategy earning the spread and an unhealthy one that got lucky on a directional move can post the same total. `MarketMaker` splits its P&L into two running totals that always sum to the total:
+`simulator/avellaneda_stoikov.py` implements the actual Avellaneda-Stoikov (2008) optimal-quoting model instead of the linear heuristic above. At each step it computes a *reservation price* i.e the price it would be indifferent to trading at given its inventory, risk aversion (`gamma`), recent price variance, and how much of a trading horizon (`total_steps`) remains and quotes a spread around that reservation price, using the following formulae:
 
-- **`spread_pnl`** — the edge captured on each fill, priced against the mid the quote was centered on at the moment it was posted. Selling above that mid or buying below it is pure liquidity-provision profit, independent of whatever the price does afterwards.
-- **`inventory_pnl(book)`** — everything else: the mark-to-market gain or loss on whatever's been carried since each fill, as fair value has drifted since then. This is the cost (or, occasionally, the windfall) of holding directional risk instead of staying flat.
+```
+reservation = mid - inventory * gamma * sigma^2 * time_remaining
+spread      = gamma * sigma^2 * time_remaining + (2 / gamma) * ln(1 + gamma / k)
+```
+We can see a few advantages listed previously compared to the previous model limitations.
 
-`metrics/pnl_history.py` (`PnLHistory`) records both every step and plots them alongside the total, wired into `simulate_random_flow` the same way as `DepthHistory`. Running `main.py` saves this to `images/pnl_breakdown.png`:
+- an explicit `total_steps`/`t` horizon
+- fixes the first a single formula derived from inventory, risk aversion, variance, and time-to-horizon replaces the two independently-tuned knobs, fixing the second
+- a proper increment-based variance estimator fixes the third
+- the reservation-price skew `q·γ·σ²·(T-t)` falls out of the math rather than being capped, fixing the fourth
+- an explicit `gamma` parameter fixes the fifth
+-  the `k` driven floor term ties the spread to a model of order-arrival decay, fixing the sixth. though `gamma` and `k` are still hand-picked for this toy sim rather than calibrated to real market data we adress this issue later.
+
+**bug fix** 
+
+The Avellaneda-Stoikov (2008) paper assumes the market maker is a small player whose own quotes can't move the mid-price, price has its own path.
+
+-  Inventory builds up to a moderate size, and realized volatility ticks up (nothing artificial — just normal price noise).
+-  Inventory skew (skew_shift in avellaneda_stoikov.py:125) pushes the reservation price tens of units away from mid.
+-  That skewed quote is far enough from fair value that it gets hit immediately.
+-  That trade is now a large price jump in the trade tape, which feeds into next step's _price_increment_variance (avellaneda_stoikov.py:99) — the sigma² estimate — pushing the next quote out even further.
+-  That's a positive feedback loop: bigger skew → gets hit → bigger price jump → bigger variance estimate → bigger skew.
+
+Fix-
+
+- `max_variance_term` (`avellaneda_stoikov.py`:121) caps how much the variance term (`gamma * sigma² * time_remaining`) can grow in a single step,
+- `skew_shift` is clamped to at most half the spread (`avellaneda_stoikov.py`:126) — meaning inventory skew can pull a quote all the way to fair value (reservation = mid, effectively) but never push it through fair value to the other side.
+
+### Issues with model
+
+- Assumes a market maker that can't move its own mid-price 
+- Is calibrated with hand-picked, uncalibrated gamma/k rather than real market data, so the results says more about this sim's specific order-flow model and toy parameter choices than about the strategy itself.
+
+
+
+
+### Where the P&L actually comes from 
+
+`MarketMaker` splits its P&L into two running totals that always sum to the total mark to market/P&L:
+
+- **`spread_pnl`** — Selling above that mid or buying below it is pure liquidity-provision profit, independent of whatever the price does afterwards.
+- **`inventory_pnl(book)`** — everything else: the mark-to-market gain or loss on whatever's been carried since each fill, as fair value has drifted since then. This is the cost of holding directional risk instead of staying flat.
+
+`metrics/pnl_history.py` (`PnLHistory`) records these, run from main.
 
 ![P&L breakdown](images/pnl_breakdown.png)
 
-In this run, `spread_pnl` climbs steadily and almost monotonically — the quoting logic reliably earns its edge — while `inventory_pnl` trends negative and gets worse over the run, dragging down what would otherwise be a much larger total. That's the picture of a market maker doing its core job correctly (capturing the spread) while losing money on the side effect of doing that job (carrying inventory through directional moves) — exactly the failure mode `analysis/tune_market_maker.py` traced to `max_inventory` being pinned too readily during trending runs. Without this split, the total P&L alone would just look mediocre; with it, it's clear *which half* of the strategy needs work.
+In this run, spread_pnl rises steadily, the market maker reliably earns money just from quoting, while inventory_pnl keeps getting worse. This shows the market maker doing its core job well (capturing the spread) but losing money on the side effect (holding inventory during price trends), present issue of max inventory in trending markets again. 
 
 ## Performance
 
-`_best_bid()`/`_best_ask()` used to scan every resting price level with `max()`/`min()` on every call — `O(n)` in the number of price levels, and these are called on nearly every operation. They're now backed by a heap (bids negated to simulate a max-heap; lazy deletion for entries whose price level has since emptied out), which keeps lookups `O(log n)` amortized regardless of how many levels are resting.
+`_best_bid()`/`_best_ask()` used to scan every resting price level with `max()`/`min()` on every call, `O(n)` in the number of price levels. Now they are  backed by a heap, see below file, which keeps lookups `O(log n)` amortized regardless of how many levels are resting.
 
 ```bash
 python benchmarks/bench_best_price.py
@@ -160,9 +199,28 @@ python benchmarks/bench_best_price.py
    50000     2864.49ms        0.27ms  10423.9x
 ```
 
-## Strategy comparison
+## Pricing Issue  - PLEASE READ
 
-A single simulation run only tells you what happened in one random scenario, not whether an agent has a real edge. `analysis/compare_strategies.py` runs the simulation across 200 independent random seeds and compares `MarketMaker`, `AvellanedaStoikovMarketMaker`, and `ImbalanceTrader` on final mark-to-market P&L. `MarketMaker` and `AvellanedaStoikovMarketMaker` each get their own simulation per seed rather than sharing one book — `simulate_random_flow` only ever quotes one market maker per run, and since each MM's own resting quotes shape the book, a shared book wouldn't be a fair shared comparison anyway. Reseeding to the same seed before each keeps the *input* order flow identical between them; the *realized* flow still diverges once each MM starts quoting differently, the same caveat `analysis/avellaneda_stoikov_demo.py`'s single-run comparison already flags.
+We would like to be able to compare and analyse results from out code. One major issue is that our market makers quotes often shape the market and have a heavy influence on the mid-price.
+
+`random_flow.py`'s synthetic limit orders anchor to `book.mid_price()` every step, and a resting market maker's own bid/ask are frequently the best bid/ask in the book, so the "market" a strategy is scored against isn't independent of the strategy itself. It results in heavy bias and creates a feedback loop, i.e `MarketMaker` quotes, that quote often sets the mid, the next synthetic order re-centers on that new mid, `MarketMaker` quotes again around it, and so on. Two consequences follow directly:
+
+- **Tuning sweeps can crown the wrong "best" config.** A `spread`/`max_inventory` (or `gamma`/`k`) combination isn't just scored on how well it manages inventory risk against the market, it's also scored on how favourably it happens to interact with its own feedback loop. 
+- **Head-to-head comparisons.** `MarketMaker` and `AvellanedaStoikovMarketMaker` quote differently, so even reseeded to the same starting seed, each shapes *its own* book's mid differently once it starts quoting
+
+The fix used throughout the sections below is to stop letting the mid come from the book at all. `simulate_historical_flow` (`simulator/historical_flow.py`) anchors every synthetic order to an externally supplied price series instead of `book.mid_price()`, so nothing any agent does can move the price its own P&L is later measured against. That series can be a synthetic price path (`simulator/gbm_flow.py`, driftless or with drift confined to `InformedTrader`'s own known windows) or a real historical one (`data/btcusdt_1m.csv`) — either way, it's fixed before the run starts and no agent's quotes can touch it. Sections below are marked by which price process they use, so results that still run against the self-referential walk aren't mistaken for the corrected ones.
+
+`simulator/gbm_flow.py`'s synthetic path is now GARCH(1,1) with Student-t innovations, not plain constant-volatility GBM — see "GBM Priced" below for why that changed and what it fixes.
+
+We also include a section where we extract real historical data towards the end.
+
+## GBM Priced (GARCH(1,1) implementation)
+
+
+
+### Strategy comparison - Please see tuning after for explanation
+
+`analysis/compare_strategies.py` runs the simulation across 200 independent random seeds and compares `MarketMaker`, `AvellanedaStoikovMarketMaker`, and `ImbalanceTrader` on final mark-to-market P&L. `MarketMaker` and `AvellanedaStoikovMarketMaker` each get their own simulation per seed rather than sharing one book (quotes still add shape), but both are anchored to the identical GARCH-GBM path for that seed, generated fresh per seed rather than reused across seeds.
 
 ```bash
 python -m analysis.compare_strategies
@@ -171,26 +229,26 @@ python -m analysis.compare_strategies
 ```
 200 runs, 0-199
 
-MarketMaker        mean=   -77.97  stdev=  571.09  min= -3049.94  max=   764.50  profitable=111/200 ( 55.5%)
-AvellanedaStoikov  mean=   -17.84  stdev=  379.41  min= -2112.75  max=   497.44  profitable=115/200 ( 57.5%)
-ImbalanceTrader    mean=   663.39  stdev=  765.25  min=  -668.82  max=  3014.50  profitable=161/200 ( 80.5%)
+MarketMaker        mean=  -143.20  stdev= 1482.13  min= -9461.07  max=  3297.12  profitable=102/200 ( 51.0%)
+AvellanedaStoikov  mean= -1626.25  stdev= 1442.43  min= -8950.71  max=   687.59  profitable= 12/200 (  6.0%)
+ImbalanceTrader    mean=  -593.73  stdev= 2215.07  min= -6975.88  max= 10963.06  profitable= 80/200 ( 40.0%)
 
-MarketMaker beat ImbalanceTrader head-to-head in 62/200 runs (31.0%)
-AvellanedaStoikov beat ImbalanceTrader head-to-head in 53/200 runs (26.5%)
-AvellanedaStoikov beat MarketMaker head-to-head in 97/200 runs (48.5%)
+MarketMaker beat ImbalanceTrader head-to-head in 124/200 runs (62.0%)
+AvellanedaStoikov beat ImbalanceTrader head-to-head in 83/200 runs (41.5%)
+AvellanedaStoikov beat MarketMaker head-to-head in 5/200 runs (2.5%)
 ```
 
-Across this random-flow model, `ImbalanceTrader` comes out ahead on every measure over both market makers — higher mean P&L, higher win rate, and it beats each of them head-to-head in the large majority of seeds. `MarketMaker`'s mean P&L is negative, with a dramatically fatter downside tail (min of -3049.94, versus -1929.00 the first time this comparison was run) — a direct consequence of `MarketMaker` now widening its spread with volatility and skewing its quotes against inventory by default (`vol_coef=1.0`, `skew_coef=1.0`, both added after this comparison was first generated). At its default config (`spread=2, max_inventory=50`), that combination sits squarely inside the worst zone the tuning sweep below now finds — see "Is that a tuning problem or something structural?" for why.
+The `min`/`max` columns show the fat tails directly: every agent's worst and best run got noticeably more extreme than the old plain-GBM figures (e.g. `MarketMaker`'s min went from -5406.92 to -9461.07, `ImbalanceTrader`'s max from 6171.42 to 10963.06) — the GARCH path's occasional large Student-t shocks show up as real tail P&L, not just a wider mean/stdev.
 
-`AvellanedaStoikovMarketMaker`, at its own defaults (`gamma=0.0001, k=1.5`), is a genuinely mixed result rather than a clean win: its mean P&L (-17.84) is less negative than `MarketMaker`'s, and its risk profile is visibly tighter — stdev 379.41 vs 571.09, a downside tail that stops nearly 1000 points shallower (-2112.75 vs -3049.94). But it doesn't translate into beating either opponent more often: it loses to `ImbalanceTrader` head-to-head *more* often than `MarketMaker` does (26.5% vs 31.0%), and it's roughly a coin flip against `MarketMaker` itself (48.5%). The single-seed demo in the Avellaneda-Stoikov section below shows it clearly winning that one run's stress scenario — this 200-seed comparison is the correction: a principled quoting model produces a *safer* P&L distribution (smaller variance, shallower tail) without necessarily producing a *higher-scoring* one against every kind of counterparty flow, at least not before any tuning (see the gamma/k sweep below). Both results are real; neither is the whole story on its own.
 
-This says more about how this particular random order flow interacts with each market maker's current default tuning than it does about market making in general — a real market maker's edge shows up against genuine adverse-selection dynamics this simplified flow doesn't fully capture, and different parameter choices move these numbers substantially (see below for both) — but these are real, reproducible results rather than anecdotes from one run.
 
 ![Strategy comparison](images/strategy_comparison.png)
 
-### Is that a tuning problem or something structural?
+## Is it a Tuning Issue?  - Streamlit recomennded to test variety of parameters
 
-`analysis/tune_market_maker.py` sweeps `MarketMaker`'s `spread` and `max_inventory` across a grid (`ImbalanceTrader` held fixed, same config as above) to check.
+### Marker Maker
+
+`analysis/tune_market_maker.py` sweeps `MarketMaker`'s `spread` and `max_inventory` across a grid (`ImbalanceTrader` present, same as above), anchored to the same GARCH-GBM exogenous price path per seed as the strategy comparison above.
 
 ```bash
 python -m analysis.tune_market_maker
@@ -198,15 +256,11 @@ python -m analysis.tune_market_maker
 
 ![Market maker tuning](images/market_maker_tuning.png)
 
-The picture here has changed since this sweep was first generated: `MarketMaker` now widens its spread with realized volatility and skews its quotes against inventory by default (`vol_coef=1.0`, `skew_coef=1.0`, added in later phases — see "How the market maker works" above), neither of which existed the first time this grid was run. Re-running it against current defaults flips the previous conclusion. The best configuration is now `spread=8, max_inventory=10` (mean P&L ≈ 386.98, 94% profitable) — a *tight* inventory cap paired with a *wide* spread, the opposite of the old advice to raise `max_inventory`. `max_inventory=200` is still solidly positive at every spread tested (129 to 337 mean P&L), but it's no longer the best choice at any of them.
+Performance rises with `spread` almost everywhere in the grid since wider quotes simply capture more per fill. The interaction with `max_inventory` flips direction as `spread` widens, at `spread=1`, a bigger inventory cap makes things steadily worse, since the extra exposure isn't compensated by a wide enough spread. The best cell is `spread=8, max_inventory=50` (mean P&L 2405.79, 92% profitable), still the widest spread in the grid, but now a *mid-sized* cap rather than the largest one. That's a genuine shift from the old plain-GBM sweep (which crowned `max_inventory=200`, the largest cap): under fat tails an occasional large shock can hit a big resting inventory much harder, so the best cap now trades off some upside against limiting exposure to that tail risk, instead of just maximizing exposure to the (previously thinner-tailed) trend.
 
-The mid-range caps are the clear losers now instead. `max_inventory=50` and `max_inventory=100` are barely positive at `spread=1` and get steadily worse as spread widens, bottoming out at −405 mean P&L (`spread=8, max_inventory=50`) — well past the old "danger zone" this section used to describe as an edge case. The likely mechanism is the one the adverse-selection stress test below later confirmed in isolation: inventory skew scales with the volatility-widened half-spread, so once a position is large enough to matter, a wider spread means a proportionally bigger skew swing. A tight cap (`max_inventory=10`) never lets inventory get big enough for that to bite; a high cap (`max_inventory=200`) rarely gets pinned in the first place, so the amplified skew stays modest relative to the position size; a moderate cap gets pinned often enough, at a large enough size, for the amplified skew to actively hurt. That's still inferred from the pattern rather than isolated directly in this script — but it's the same mechanism the stress test's `vol_coef`/`skew_coef` grid measured directly and found real, so it's on firmer ground than when this section first floated it as a hypothesis.
+### Avellaneda-Stoikov Market Maker
 
-This also explains why `MarketMaker`'s numbers in the strategy comparison above got *worse*, not better, once the volatility/skew defaults went live: `compare_strategies.py` runs `MarketMaker` at `spread=2, max_inventory=50` — squarely inside the zone this sweep now finds worst (mean P&L −66.85 at that exact config, in this sweep's own sample). Even the new best (≈387) doesn't close the gap to `ImbalanceTrader`'s ≈663 mean from the fresh comparison above, so the underperformance is still *partly* a tuning issue and *partly* structural — but "tuning" now points toward a tighter inventory cap and a wider spread, the opposite of what this section originally recommended.
-
-### Does the same apply to Avellaneda-Stoikov?
-
-`AvellanedaStoikovMarketMaker`'s knobs (`gamma`, `k`) aren't comparable to `MarketMaker`'s (`spread`, `max_inventory`), so this gets its own sweep rather than an extra axis on the grid above: `analysis/tune_avellaneda_stoikov.py` sweeps `gamma` (risk aversion) and `k` (order-arrival decay) across a grid, 50 seeds each, `ImbalanceTrader` held fixed at the same config as everywhere else.
+`AvellanedaStoikovMarketMaker`'s knobs (`gamma`risk aversion and `k` order-arrival decay) aren't comparable to `MarketMaker`'s (`spread`, `max_inventory`), so this gets its own sweep rather than an extra axis on the grid above. 
 
 ```bash
 python -m analysis.tune_avellaneda_stoikov
@@ -214,15 +268,17 @@ python -m analysis.tune_avellaneda_stoikov
 
 ![Avellaneda-Stoikov tuning](images/avellaneda_stoikov_tuning.png)
 
-The default (`gamma=0.0001, k=1.5`) is nowhere near the best cell in this grid — best is `gamma=0.00002, k=1.0` (mean P&L 242.41, 84% profitable), more than a hundred points ahead of the default's neighborhood (`gamma=0.0001, k=1.5` scores 57.58 in this sweep's own sample) and solidly positive where `compare_strategies.py`'s fresh 200-seed run above found the default only marginally negative (-17.84). The clearest pattern in the grid is `gamma` itself: performance falls off almost monotonically as `gamma` rises at every `k` tested, from a best-in-grid 242.41 at `gamma=0.00002` down to -804.47 at `gamma=0.001, k=0.5` — a heavily risk-averse quoter skews its reservation price hard against inventory on every fill, which costs more in given-up spread than it saves in avoided adverse selection under this random-flow model. `k` matters too but less cleanly: `k=1.0`–`1.5` outperforms both the tight `k=0.5` floor and the wide `k=4.0` floor at every `gamma` tested, suggesting the order-arrival-decay floor term has its own sweet spot independent of risk aversion.
+The default (`gamma=0.0001, k=1.5`) used previously is nowhere close to the best. Performance rises almost monotonically with `gamma` at every `k` tested. A heavily risk averse quoter skews its reservation price hard against inventory on every fill and against a price it genuinely can't influence, skew saves us. `k` matters too since `k=0.5`, the tightest order-arrival floor, outperforms every wider `k` at every `gamma` tested. The best cell is `gamma=0.001, k=0.5` (mean P&L 1438.45, 86% profitable) — the highest risk aversion and the tightest floor in the grid, the same corner as before; the fat tails and clustering lower the mean P&L somewhat (1562.08 → 1438.45) but don't change which corner wins.
 
-Even the best cell (242.41) doesn't close the gap to `ImbalanceTrader`'s ≈663 mean — same conclusion as `tune_market_maker.py` above: tuning narrows the gap substantially without eliminating it, so the underperformance against this particular order-flow model is still partly tuning, partly structural. But it does mean the mixed strategy-comparison result above is at least partly a default-tuning artifact rather than a ceiling on the model itself — worth remembering before concluding the principled model "doesn't work" from the default-parameter comparison alone.
+The best cell comfortably clears `ImbalanceTrader`'s own mean (-593.73) from the strategy comparison above, unlike the untuned default. So the mixed/losing strategy-comparison result above is a default-tuning artifact.
+
+I recommend the reader use the streamlit app to investigate and play with these parameters. As well as seeing the impact of a informed trader on these results.
 
 ## Adverse selection stress test
 
-Everything above uses random order flow — nobody in the sim actually knows where price is going next, so any adverse selection `MarketMaker` suffers is incidental. `simulator/informed_trader.py` adds `InformedTrader`: fed a ground-truth schedule of future price-drift windows at construction, it just trades a market order in that direction every step a window is active. Its own flow is what causes the drift — real informed trading moves prices for exactly this reason — so this is the simplest possible way to inject *genuine* adverse selection into the sim, on purpose, instead of hoping the random walk produces some.
+Nobody in a plain GARCH-GBM path knows where price is going next, so any adverse selection `MarketMaker` suffers there is incidental. `simulator/informed_trader.py` adds `InformedTrader`, fed a ground-truth schedule of future price-drift windows at construction, which trades a market order in that direction every step a window is active. To keep that edge the price itself carries drift only during those same windows instead. `simulator/gbm_flow.py`'s `generate_scheduled_drift_garch_gbm_path` builds a GARCH-GBM path from `InformedTrader`'s own `schedule`, drift on during the window, so the move is in the exogenous anchor not dependent on order flow.
 
-`analysis/stress_test_market_maker.py` runs `MarketMaker` against two 50-step informed windows (a "buy" drift, then later a "sell" drift) layered on top of the normal random flow, recording `spread_pnl`/`inventory_pnl` via `PnLHistory` throughout:
+`analysis/stress_test_market_maker.py` runs `MarketMaker` against two 50-step informed windows (a "buy" drift, then later a "sell" drift), recording `spread_pnl`/`inventory_pnl` via `PnLHistory` throughout:
 
 ```bash
 python -m analysis.stress_test_market_maker
@@ -230,80 +286,59 @@ python -m analysis.stress_test_market_maker
 
 ![Informed trader demo](images/informed_trader_demo.png)
 
-`spread_pnl` keeps climbing steadily straight through both shaded windows — `MarketMaker` is still earning its edge on every individual fill, exactly as the "spread P&L can never go negative" property from Phase 2 predicts. `inventory_pnl` tells the opposite story: it craters right as each window opens, as `MarketMaker` keeps quoting a spread around a mid the informed trader's own flow is actively walking away from it — buying into a rise, then getting caught short into a further fall. That's adverse selection, live, in this run: `spread_pnl` finished at +1608, but `inventory_pnl` finished at −2409 — dragging the total down to −800 despite the strategy earning its spread the entire time.
+`spread_pnl` climbs steadily throughout the run, `MarketMaker` is still earning its edge on every individual fill. `inventory_pnl` tells the opposite story, it craters right as each window opens, as `MarketMaker` keeps quoting a spread around a mid the scheduled drift is actively walking away from it. Essentially, you're buying into a rise then getting caught short into a further fall. 
 
-### Does widening protect you? Does skew help you recover?
+### Does widening protect you? Does skew help you recover? 
 
-Two independent knobs make this directly testable: `vol_coef` (Phase 1 — widens quotes with realized volatility) and a new `skew_coef` (multiplies the inventory-skew term; `skew_coef=0` disables it). Sweeping both across `{0, 1} × {0, 1}`, 30 seeds each, and measuring (a) the worst `inventory_pnl` drawdown reached during each informed window and (b) mean `|inventory|` over the 50 steps after a window ends (how close it's gotten back to flat):
+Two independent parameters are available to test: `vol_coef` (widens quotes with realized volatility), `skew_coef` (multiplies the inventory-skew term; `skew_coef=0` disables it). Sweeping both across `{0, 1} × {0, 1}`, 30 seeds each, and measuring the worst `inventory_pnl` drawdown in the window, then the mean `abs|inventory|` over the 50 steps after a window ends (how close it's gotten back to flat).
 
 ```
-vol_coef=0.0  skew_coef=0.0  mean_drawdown=  -272.89  mean_|inventory|_after= 45.99
-vol_coef=0.0  skew_coef=1.0  mean_drawdown=  -444.77  mean_|inventory|_after= 38.29
-vol_coef=1.0  skew_coef=0.0  mean_drawdown=  -201.00  mean_|inventory|_after= 45.67  <-- smallest drawdown
-vol_coef=1.0  skew_coef=1.0  mean_drawdown=  -627.10  mean_|inventory|_after= 32.89  <-- fastest reversion
+vol_coef=0.0  skew_coef=0.0  mean_drawdown=  -967.21  mean_|inventory|_after= 46.59
+vol_coef=0.0  skew_coef=1.0  mean_drawdown=  -971.36  mean_|inventory|_after= 40.25
+vol_coef=1.0  skew_coef=0.0  mean_drawdown=  -846.71  mean_|inventory|_after= 46.59  <-- smallest drawdown
+vol_coef=1.0  skew_coef=1.0  mean_drawdown=  -895.37  mean_|inventory|_after= 38.78  <-- fastest reversion
 ```
 
 ![Stress test grid](images/stress_test_grid.png)
 
-**Skew helps mean-revert, cleanly and consistently.** Both `skew_coef=1.0` rows post a lower `mean_|inventory|_after` than the matching `skew_coef=0.0` row, regardless of `vol_coef` — skewing quotes against inventory does pull the position back toward flat faster once the informed pressure (and whatever was driving it) stops.
+**Skew helps mean-revert, cleanly and consistently.** Both `skew_coef=1.0` rows post a lower `mean_|inventory|_after` than the matching `skew_coef=0.0` row, regardless of `vol_coef` since skewing quotes against inventory pulls the position back toward flat faster once the drift window ends.
 
-**Widening does *not* uniformly protect you — and that's the more interesting result.** At `skew_coef=0`, widening helps as you'd expect: `vol_coef=1.0` cuts the drawdown from −272.89 to −201.00. But at `skew_coef=1`, widening makes the drawdown almost 3x *worse* (−444.77 → −627.10). The mechanism is exactly what `tune_market_maker.py`'s "danger zone" upstream could only hypothesize from a P&L heatmap: `skew = skew_coef * (inventory/max_inventory) * half`, so a wider `half` (from volatility widening) multiplies directly into a bigger *absolute* skew once inventory has built up — right as an informed trader is running that inventory up further. Widening is protective on its own; widening layered on top of an already-engaged skew mechanism amplifies exactly the exposure it was meant to guard against. Two mechanisms that each look sensible in isolation combine into something worse than either alone — this stress test reproduces the actual failure mode the tuning heatmap could only gesture at.
+**Widening modestly helps drawdown at both `skew_coef` settings, and the two knobs don't fight each other.** `vol_coef=1` improves drawdown over `vol_coef=0` whether `skew_coef` is 0 (-967.21 to -846.71) or 1 (-971.36 to -895.37), a small, consistent improvement in both cases rather than a sharp interaction effect — the same qualitative finding as before the GARCH-GBM switch, with the exact numbers shifted by the added tail risk and clustering.
 
-One confound worth flagging in reading the drawdown numbers literally: the informed trader always sends *market* orders, which are marketable regardless of `MarketMaker`'s spread — widening doesn't stop it from trading, it changes *who* it trades against. A wider `MarketMaker` quote sits further from the top of book, so more of the informed flow gets absorbed by other resting random-flow orders instead of `MarketMaker` itself. Both effects (less edge given up per trade against the MM, and being hit less often in the first place) are real, and both are baked into the numbers above — they just aren't separable from this experiment alone.
+Informed trader always has marketable orders regardless of `MarketMaker`'s spread — widening doesn't stop it from trading, it changes *who* it trades against. A wider `MarketMaker` quote sits further from the top of book, so more of the flow gets absorbed by other resting synthetic orders instead of `MarketMaker` itself.
 
-## Avellaneda-Stoikov market maker
 
-`simulator/avellaneda_stoikov.py` implements the actual Avellaneda-Stoikov (2008) optimal-quoting model instead of the linear heuristic above. Each step it computes a *reservation price* — the price it would be indifferent to trading at given its inventory, risk aversion (`gamma`), recent price variance, and how much of a trading horizon (`total_steps`) remains — and quotes a spread around that reservation price, not around mid:
+### Avellaneda_stoikov_demo (default)
 
-```
-reservation = mid - inventory * gamma * sigma^2 * time_remaining
-spread      = gamma * sigma^2 * time_remaining + (2 / gamma) * ln(1 + gamma / k)
-```
-
-Both terms involving `time_remaining` shrink to zero as the horizon is reached, so quotes flatten toward a pure microstructure width near the end of a run — a genuine time dimension the linear heuristic doesn't have. `AvellanedaStoikovMarketMaker` subclasses `MarketMaker` and overrides only the pricing step (`_compute_quote_prices`, extracted from `MarketMaker.quote()` specifically to make this possible), so it reuses the exact same settle/cancel/repost loop and spread/inventory P&L split as everything above.
-
-**A real stability bug turned up building this, not a hypothetical one.** The paper assumes an exogenous mid-price process the market maker is too small to move; in this sim, the market maker's own resting quotes are usually the top of book, so that assumption doesn't hold. First attempt: a moderately-sized inventory combined with an entirely normal, honestly-computed volatility uptick pushed the reservation price tens of units from mid, which got the quote hit, which produced a large price jump, which fed straight into the *next* step's variance estimate — pushing the following quote even further out. That fed back on itself and blew up into a nonsensical multi-million-unit quote within about 20 steps, confirmed by tracing the exact sequence (inventory, sigma², and the resulting shift, step by step) rather than just guessing at smaller constants and hoping. The fix ended up being two safeguards, not one: capping how much the variance term can grow in a single step (so one large trade can't compound), and — the one that actually mattered — clamping the inventory skew to at most half the spread, the same invariant `MarketMaker`'s own linear skew already guarantees by construction, so a quote can be pulled all the way to fair value but never pushed through it. Both are documented in the class docstring as sanity clamps layered on top of the textbook formula, not part of it.
-
-`analysis/avellaneda_stoikov_demo.py` runs both market makers through the identical informed-trader stress scenario from the section above (same schedule, same seed):
+`analysis/avellaneda_stoikov_demo.py` runs both market makers through the identical informed-trader stress scenario from the section above (same schedule, same scheduled-drift GARCH-GBM path):
 
 ```bash
 python -m analysis.avellaneda_stoikov_demo
 ```
 
 ```
-MarketMaker:                 spread_pnl=1608.38, inventory_pnl=-2408.77, total=-800.39
-AvellanedaStoikovMarketMaker: spread_pnl=818.93,  inventory_pnl=-1359.49, total=-540.56
+MarketMaker:                 spread_pnl=2226.74, inventory_pnl=-2264.44, total=-37.70
+AvellanedaStoikovMarketMaker: spread_pnl=852.07, inventory_pnl=-2533.78, total=-1681.70
 ```
 
 ![Avellaneda-Stoikov comparison](images/avellaneda_stoikov_comparison.png)
 
-`AvellanedaStoikovMarketMaker` takes a noticeably smaller `inventory_pnl` hit through both shaded informed windows (-1359 vs. -2409) and ends with a better total, at the cost of capturing less `spread_pnl` (819 vs. 1608) — it's quoting tighter overall, so it earns less per fill but also carries less exposure into the adverse moves. That's the reservation-price mechanism doing its job: unlike the linear heuristic, the inventory term here isn't bounded by a hand-picked coefficient, it's driven by the same variance estimate that widens the spread.
-
-The second plot shows the effect the linear heuristic structurally cannot produce — reservation price and half-spread compressing toward the horizon within a single run:
-
-![Avellaneda-Stoikov horizon decay](images/avellaneda_stoikov_horizon_decay.png)
-
-Half-spread tracks realized volatility for most of the run (bumps up during choppier stretches, including around the informed windows), but in the final ~100 steps it converges tightly onto the pure `k`-driven floor (~0.667) regardless of what volatility is doing at that moment, as `time_remaining` runs down to zero — exactly the horizon-flattening behavior the model predicts and the heuristic MM has no mechanism to produce at all.
+`AvellanedaStoikovMarketMaker` takes a *larger* `inventory_pnl` hit here than the linear heuristic (-2533.78 vs. -2264.44) and finishes well behind it (-1681.70 vs. -37.70) — the same finding as the strategy comparison above, from a different angle. It's running at `gamma=0.0001`, the specific setting the tuning sweep above shows is the worst in the grid, not a merely suboptimal one. The model just hasn't been pointed at parameters suited to a price it has no ability to lean on.
 
 ### Is this actually high-frequency trading?
 
-Not in any operational sense, even though the model comes from a paper titled "High-frequency trading in a limit order book" and the strategy it describes — continuously re-quoting both sides, adjusting every tick — is exactly what real HFT desks run. What this project simulates is the *strategy*, not the *speed* real HFT needs to run it profitably. Concretely, it doesn't model:
+Not in any operational sense, even though the model comes from a paper titled "High-frequency trading in a limit order book" and the strategy where you continuously re-quote both sides. What this project simulates is the *strategy*, not the *speed* real HFT needs to run it profitably. Concretely, it doesn't model:
 
-- **Wall-clock time or latency.** A "step" is a sequential tick, not a microsecond or millisecond — there's no notion of how fast a quote update reaches the exchange relative to anyone else's.
-- **Competition for speed.** Real HFT market making is a race: whoever requotes a stale price first avoids getting picked off. This sim has price-time priority *within* the book (`lob/book.py`), but no other participant racing to requote faster than this market maker.
-- **An exogenous price process.** The paper assumes the market is large enough that one participant's own quotes don't move the "true" price. In this sim they do — the market maker's own resting orders are often the best bid/ask — which is exactly what caused the feedback-loop bug described above, not a separate issue. (`analysis/historical_backtest.py`, below, addresses this one specifically — synthetic order flow anchored to a real price series it can't influence.)
-- **Calibrated parameters.** `gamma` and `k` are hand-picked to keep this particular sim's price scale stable, not fit from real market data or observed fill rates.
-- **Realistic order flow.** Counterparties are a synthetic random-order generator (`simulator/random_flow.py`) plus two scripted agents (`ImbalanceTrader`, `InformedTrader`) — not real, adversarial participants reacting to this market maker the way real counterparties would.
 
-So: a genuine implementation of a market-making *model* drawn from the HFT literature, running inside a toy discrete-event simulator that makes no attempt to model the speed, latency, or competitive dynamics "high-frequency" actually refers to.
+## Non GBM
 
-## Real historical data backtest
+## Real historical data backtest (2026-08-30, 14:21–22:40 UTC)
 
-Everything above trades against `random_flow.py`'s synthetic random walk — a mid price that's entirely a product of the sim's own synthetic order flow, with no process outside it. `analysis/historical_backtest.py` replaces that with `simulator/historical_flow.py`, which anchors every synthetic order to a *real* historical price series instead: `data/btcusdt_1m.csv`, 1000 minutes of real BTCUSDT 1-minute close prices pulled from Binance's public klines endpoint (no authentication required; fetched once and committed as a static CSV so runs stay offline and reproducible, rather than hitting a live API on every run or in CI).
+Everything above anchors to a synthetic GARCH-GBM price path i.e exogenous, and now shaped to carry BTCUSDT-like fat tails and volatility clustering, but still not the *actual* historical path: no genuine drift, no real jump timing, no event influence. `analysis/historical_backtest.py` swaps that for `simulator/historical_flow.py` anchored to an actual historical series instead: `data/btcusdt_1m.csv`, 1000 minutes of real BTCUSDT 1-minute close prices (no authentication required; fetched once and committed as a static CSV).
 
-Order-level replay of genuine market microstructure (submissions, cancellations, modifications) would need a licensed feed like LOBSTER, which explicitly disallows redistributing its data — not an option for a public repo. So this backtest is a deliberate partial step, not a full one: **the fair-value process is real, the order arrivals around it are still synthetic**, generated the same way `random_flow.py`'s are. What that buys is the one thing flagged as missing throughout the Avellaneda-Stoikov section above — a genuinely *exogenous* price process no agent's own quotes can move, because it was recorded before the simulation ever ran, instead of a mid price that's just whatever the sim's own synthetic flow happens to produce.
+Order-level replay of genuine market microstructure (submissions, cancellations, modifications) would need a licensed feed like LOBSTER, which explicitly disallows redistributing its data, so **the fair-value process is real, the order arrivals around it are still synthetic**, generated the same way the GARCH-GBM-anchored runs above are. We expierience the actual drifts and jumps this market expierenced, not just another distribution — we are only pinned to one 1000 minute window.
 
-Since the real series (~78,000-79,000) and the sim's usual scale (agent defaults tuned around ~100) don't match, `rescale_to_sim_scale()` rebuilds a ~100-based series by replaying the real data's actual percentage returns onto a synthetic starting price — the real shape (drift, volatility, jump timing), on a compatible scale.
+Since the real series (~78,000-79,000) and the sim's usual scale (agent defaults tuned around ~100) don't match, `rescale_to_sim_scale()` rebuilds a ~100 based series by replaying the real data's actual percentage returns onto a synthetic starting price, the real shape (drift, volatility, jump timing), on a compatible scale.
 
 ```bash
 python -m analysis.historical_backtest
@@ -320,14 +355,33 @@ Mean |book mid - real anchor|: MarketMaker=1.305, AvellanedaStoikov=1.041
 
 ![Historical backtest P&L](images/historical_backtest_pnl.png)
 
-Both market makers finish profitable against this real window (2026-08-30, 14:21–22:40 UTC) — a calm one, only a 1.32% price range across the whole 500 minutes. `MarketMaker` outperforms `AvellanedaStoikovMarketMaker` here (708.86 vs 327.28), the reverse of the single-seed informed-trader stress demo earlier, which is a useful reminder rather than a contradiction: relative performance depends heavily on the specific price path and counterparty flow a run happens to face, exactly the reason `compare_strategies.py` exists to average over many scenarios instead of trusting any one run — real data doesn't exempt a backtest from that, it's still one path out of however many the market could have taken.
+Both market makers finish profitable against this real window; a calm one, only a 1.32% price range across the whole 500 minutes. `MarketMaker` outperforms `AvellanedaStoikovMarketMaker` here (708.86 vs 327.28), consistent with every other default `gamma` comparison in this README (the strategy comparison, the adverse-selection demo). `AvellanedaStoikovMarketMaker`'s tuning gap isn't a synthetic-GBM artifact, it shows up against real market data too. That said, this is still one 500-minute window out of however many the market could have taken, exactly the reason `compare_strategies.py` exists to average over many scenarios instead of trusting any one run.
 
 ![Historical backtest price tracking](images/historical_backtest_price.png)
 
-The second chart is a sanity check, and an honest finding in its own right. Both books are anchored to the *identical* real price series, so plotting both market makers' mids against it isn't just a tracking check — any gap between the two is a direct read on which market maker's own resting quotes perturb the book furthest from the true exogenous price. There is a real, measurable gap: `AvellanedaStoikovMarketMaker` tracks the real anchor noticeably tighter than `MarketMaker` (mean `|book mid - real anchor|` 1.041 vs 1.305 — about 20% tighter — and a smaller worst-case deviation too, 3.745 vs 5.571 at this run's peak). Neither book tracks the real series' exact tick-by-tick path — both are dominated by the synthetic order-placement noise (`±3` on a ~100 base, inherited unchanged from `random_flow.py`) relative to this particular window's small real volatility (1.32% range) — but `AvellanedaStoikovMarketMaker`'s reservation-price mechanism visibly holds closer to fair value than `MarketMaker`'s linear skew does, consistent with it being the more principled model. The exogeneity claim itself holds regardless of either line's tightness: every order in both books is generated around a real, externally-fixed reference price, not one either book produces itself. A tighter demonstration for both would still scale the ±3 noise to the historical series' own realized volatility instead of a fixed constant, the same adaptive idea `MarketMaker`'s own `vol_coef` already uses elsewhere in this project — left as a natural next step rather than done here, to avoid quietly re-tuning a number until the demo chart looked better.
+ Both books are anchored to the *identical* real price series,  any gap between the two is a direct read on which market maker's own resting quotes perturb the book furthest from the true exogenous price. There is a real, measurable, gap `AvellanedaStoikovMarketMaker` tracks the real anchor noticeably tighter than `MarketMaker` (mean `|book mid - real anchor|` 1.041 vs 1.305 — about 20% tighter — and a smaller worst-case deviation too, 3.745 vs 5.571 at this run's peak). Neither book tracks the real series' exact tick-by-tick path — both are dominated by the synthetic order-placement noise (`±3` on a ~100 base, inherited unchanged from `random_flow.py`) relative to this particular window's small real volatility (1.32% range) — but `AvellanedaStoikovMarketMaker`'s reservation-price mechanism visibly holds closer to fair value than `MarketMaker`'s linear skew does, consistent with it being the more principled model.  
 
-## Example output
+## Example output from main
 
 Running `main.py` produces `images/simulation.png` — mid price, spread, and order book imbalance over the course of the simulated run — and `images/depth_heatmap.png`, showing resting order book depth by price offset from mid over time (green = bid side, red = ask side):
 
 ![Depth heatmap](images/depth_heatmap.png)
+
+The **Use GBM exogenous price path** toggle in `streamlit_app.py` exists for the same reason `analysis/historical_backtest.py` and the GBM-anchored sweeps do — a market maker's own quotes should never be able to move the price its own P&L is measured against, which is exactly the assumption the Avellaneda-Stoikov model requires. Flipping it re-runs the identical sim anchored to a synthetic, exogenous GARCH(1,1)/Student-t GBM path (fat tails, volatility clustering) instead of `simulate_random_flow`'s self-referential walk, and surfaces the `|book mid - GBM anchor|` deviation directly in the dashboard, so the self-influence a market maker's own quotes can have on its own scoring is something you can see and measure interactively, not just read about in this README. (`analysis/historical_backtest.py`'s real-BTCUSDT anchor is the equivalent check against genuine market data rather than synthetic GBM — the dashboard doesn't expose that option, since a single fixed 1000-minute series doesn't support reseeding across arbitrary seeds the way a freshly-generated GBM path does.)
+
+
+
+## Steamlit Explanation
+
+
+`streamlit_app.py` wraps the simulation code in a two-tab UI.
+
+**Single run** — choose a market maker (`MarketMaker` or `AvellanedaStoikovMarketMaker`) and its parameters, optionallly add imbalance trader or informed stress and simulate a seed, yielding `Metrics`, `DepthHistory`, `PnLHistory` charts. A **Use GBM exogenous price path** checkbox in the sidebar switches the run from `simulate_random_flow`'s self-referential walk to a GARCH-GBM path anchored via `simulate_historical_flow` (see "Strategy comparison" below). With it on, the tab also plots the GBM anchor against the book's own mid and reports the mean `|book mid - GBM anchor|` deviation, the same self-influence check `analysis/historical_backtest.py` runs against real data. There is also a **Use best known parameters** button which sets parameters to the best ones found in the GARCH-GBM-anchored market maker sweeps for both models, *'the best'* here is only measured against the *imbalance trader not informed*.
+
+`spread=8, max_inventory=50` for `MarketMaker` from `analysis/tune_market_maker.py`
+
+`gamma=0.001, k=0.5` for `AvellanedaStoikovMarketMaker` from `analysis/tune_avellaneda_stoikov.py`
+
+**Compare configurations** — set up two independent market-maker configs (A and B, any mix of model/parameters) and run them against identical input order flow, same reseed-then-diverge pattern `analysis/compare_strategies.py` uses, optionally sharing the same GBM anchor between both sides too. At 1 seed it shows a full P&L breakdown plus a total-P&L-over-time chart for each side; above 1 seed it reseeds and reruns both configs across that many seeds instead and reports the mark-to-market P&L distribution (mean/stdev/min/max/win rate, head-to-head win count, histogram), the same sweep `compare_strategies.py` runs from the command line.
+
+

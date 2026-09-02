@@ -11,7 +11,7 @@ import time
 
 
 def random_limit_order(book: LimitOrderBook, order_id: int) -> Order:
-    """Generate a random limit order around the mid price."""
+    """generate a random limit order around the mid price."""
     side: Side = random.choice(["buy", "sell"])
     size = random.randint(1, 10)
 
@@ -19,13 +19,13 @@ def random_limit_order(book: LimitOrderBook, order_id: int) -> Order:
     if mid is None:
         mid = 100  # initial mid price if book is empty
 
-    # Price distribution: small random deviation around mid
+    # price distribution: small random deviation around mid
     price = mid + random.randint(-3, 3)
 
     return Order(order_id, side, price, size)
 
 
-# market
+
 def random_market_order(book: LimitOrderBook) -> None:
     side: Side = random.choice(["buy", "sell"])
     size = random.randint(1, 10)
@@ -46,17 +46,12 @@ def simulate_random_flow(
     pnl_history: Optional[PnLHistory] = None,
 ) -> Metrics:
     """
-    Simulate random order flow using Poisson arrivals.
+    simulates random order flow using Poisson arrivals.
     lambda_limit: probability of a limit order arrival
     lambda_market: probability of a market order arrival
     sleep: seconds to wait between steps (set to 0 for instant runs)
-    metrics: optional Metrics instance to record into; created if not passed
-    market_maker: optional MarketMaker that re-quotes around mid every step
-    imbalance_trader: optional ImbalanceTrader that trades with strong imbalance
-    informed_trader: optional InformedTrader that trades a fixed schedule of directional windows
-    depth_history: optional DepthHistory to record a per-step depth snapshot into
-    pnl_history: optional PnLHistory to record market_maker's P&L split each step
-        (requires market_maker to also be passed)
+    lists metrics, agents, and optional history trackers to update each step.
+    
     """
 
     if metrics is None:
@@ -75,17 +70,17 @@ def simulate_random_flow(
         if informed_trader is not None:
             informed_trader.act(book)
 
-        # Poisson arrival: decide what type of order arrives
+        # poisson arrival decides what type of order arrives
         r = random.random()
 
         if r < lambda_limit:
-            # Generate and add a random limit order
+            # generate and add a random limit order
             order = random_limit_order(book, order_id)
             book.add_limit_order(order)
             order_id += 1
 
         elif r < lambda_limit + lambda_market:
-            # Generate a random market order
+            # generate a random market order
             random_market_order(book)
 
         metrics.update(book)
@@ -96,7 +91,7 @@ def simulate_random_flow(
         if pnl_history is not None and market_maker is not None:
             pnl_history.update(market_maker, book)
 
-        # Optional: print mid price every step
+        # optional, print mid price every step
         if t % 50 == 0:
             print(f"t={t}, mid={book.mid_price()}, spread={book.spread()}")
 

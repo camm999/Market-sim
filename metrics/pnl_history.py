@@ -1,5 +1,5 @@
 # metrics/pnl_history.py
-"""Tracks a MarketMaker's P&L, split into spread capture vs. inventory risk, over time."""
+"""tracks a marker makers p&l, split into spread capture vs. inventory risk, over time."""
 
 from typing import List, Optional
 
@@ -12,21 +12,12 @@ from simulator.market_maker import MarketMaker
 
 class PnLHistory:
     """
-    Records a MarketMaker's mark-to-market P&L every step, split into its
-    two components:
-
-    - spread P&L: the edge captured on each fill relative to the mid the
-      quote was centered on at fill time — profit from providing liquidity,
-      independent of where price goes afterwards.
-    - inventory P&L: the mark-to-market swing on whatever's been carried
-      since each fill, as fair value has moved since then.
+    splits mark to market into spread P&L and inventory P&L.
 
     spread P&L + inventory P&L == total P&L at every step. Plotting them
-    separately shows whether a run's result came from genuinely earning
-    the spread or from getting picked off by informed flow and then riding
-    the position - something the total alone can't distinguish.
+    separately shows where a run's result genuinely came from.
 
-    Also records raw `inventory` (position size, not P&L) each step, so a
+    also records raw `inventory` size each step, so a
     caller can measure how fast a position mean-reverts back toward flat
     after a shock, independent of what price did while it was open.
     """
@@ -46,7 +37,7 @@ class PnLHistory:
         self.inventory.append(market_maker.inventory)
 
     def plot(self, save_path: Optional[str] = None) -> Figure:
-        """Plot spread P&L, inventory P&L, and their total over the run."""
+        """plot spread P&L, inventory P&L, and their total over the run."""
         fig, ax = plt.subplots(figsize=(10, 5))
 
         ax.plot(self.spread_pnl, label="Spread P&L")

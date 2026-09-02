@@ -1,9 +1,13 @@
 # analysis/stress_test_market_maker.py
 """
-Phase 3: feeds the market maker an InformedTrader with a known future
+ feeds the market maker an InformedTrader with a known future
 drift schedule and watches inventory_pnl take the hit live (adverse
-selection), then checks whether wider vol-driven spreads and inventory
-skew actually mitigate it.
+selection), then checks whether wider vol-driven spreads and inventory 
+skew actually mitigate it
+
+anchored to a scheduled-drift GARCH(1,1)/Student-t GBM price path
+
+see the README's "Adverse selection stress test" 
 
 Run (from the project root): python -m analysis.stress_test_market_maker
 """
@@ -19,21 +23,22 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
 from lob.book import LimitOrderBook, Side
-from simulator.random_flow import simulate_random_flow
+from simulator.gbm_flow import generate_scheduled_drift_garch_gbm_path
+from simulator.historical_flow import simulate_historical_flow
 from simulator.market_maker import MarketMaker
 from simulator.imbalance_trader import ImbalanceTrader
 from simulator.informed_trader import InformedTrader
 from metrics.pnl_history import PnLHistory
 
-# Two 50-step drift windows (one of each direction), with plenty of plain
-# random flow before/between/after so the book settles and each window's
-# effect on inventory can fully mean-revert before the next one starts.
+
 DEFAULT_SCHEDULE: List[Tuple[int, int, Side]] = [(150, 200, "buy"), (350, 400, "sell")]
 STEPS = 600
-REVERSION_WINDOW = 50  # steps after a window ends, used to measure mean-reversion speed
+REVERSION_WINDOW = 50  
 N_SEEDS = 30
 VOL_COEFS: Tuple[float, ...] = (0.0, 1.0)
 SKEW_COEFS: Tuple[float, ...] = (0.0, 1.0)
+
+GARCH_OMEGA = 1.44e-6  # omega*(1 - alpha - beta) = 0.006^2, same alpha=0.08/beta=0.88 as the default
 
 
 def run_one(
@@ -43,8 +48,9 @@ def run_one(
     schedule: List[Tuple[int, int, Side]] = DEFAULT_SCHEDULE,
     steps: int = STEPS,
 ) -> PnLHistory:
-    """One simulation under one (vol_coef, skew_coef) config and seed;
-    returns the recorded PnLHistory for metric extraction."""
+    """one simulation under one (vol_coef, skew_coef) config and seed;
+    returns the recorded PnLHistory"""
+    prices = generate_scheduled_drift_garch_gbm_path(steps, seed, schedule, omega=GARCH_OMEGA)
     random.seed(seed)
 
     book = LimitOrderBook()
@@ -53,11 +59,10 @@ def run_one(
     informed = InformedTrader(schedule=schedule, size=4)
     history = PnLHistory()
 
-    with contextlib.redirect_stdout(io.StringIO()):  # simulate_random_flow prints progress; silence it here
-        simulate_random_flow(
+    with contextlib.redirect_stdout(io.StringIO()):  # simulate_historical_flow prints progress; silence it here
+        simulate_historical_flow(
             book,
-            steps=steps,
-            sleep=0,
+            prices,
             market_maker=mm,
             imbalance_trader=it,
             informed_trader=informed,
@@ -72,13 +77,12 @@ def window_metrics(
     schedule: List[Tuple[int, int, Side]] = DEFAULT_SCHEDULE,
     reversion_window: int = REVERSION_WINDOW,
 ) -> List[Tuple[float, float]]:
-    """Per window: (drawdown, reversion).
+    """per window: (drawdown, reversion).
 
     drawdown = worst inventory_pnl reached during the window, relative to
-    just before it started — how hard adverse selection bit, in dollars.
+    just before it started 
     reversion = mean |inventory| over the `reversion_window` steps right
-    after the window ends — how far the position is still from flat,
-    in units. Lower is better for both.
+    after the window ends, near flat or not
     """
     results = []
     for start, end, _side in schedule:
@@ -144,9 +148,8 @@ def summarize(results: List[GridResult]) -> None:
 
 
 def plot_grid(results: List[GridResult], save_path: str = "images/stress_test_grid.png") -> Figure:
-    """Bar charts of mean drawdown and mean post-window |inventory|, one bar
-    per (vol_coef, skew_coef) config, so the two questions Phase 3 asks are
-    each answerable from a single glance."""
+    """bar charts of mean drawdown and mean post-window |inventory|, one bar
+    per (vol_coef, skew_coef) config"""
     labels = [f"vol={r.vol_coef:.0f}\nskew={r.skew_coef:.0f}" for r in results]
     drawdowns = [r.mean_drawdown for r in results]
     reversions = [r.mean_reversion for r in results]
@@ -172,8 +175,8 @@ def run_demo_scenario(
     schedule: List[Tuple[int, int, Side]] = DEFAULT_SCHEDULE,
     steps: int = STEPS,
 ) -> Tuple[MarketMaker, PnLHistory]:
-    """Single seeded run at default vol_coef=1.0, skew_coef=1.0 - the
-    'watch it happen live' scenario."""
+    """single seeded run at default vol_coef=1.0, skew_coef=1.0"""
+    prices = generate_scheduled_drift_garch_gbm_path(steps, seed, schedule, omega=GARCH_OMEGA)
     random.seed(seed)
 
     book = LimitOrderBook()
@@ -183,10 +186,9 @@ def run_demo_scenario(
     history = PnLHistory()
 
     with contextlib.redirect_stdout(io.StringIO()):
-        simulate_random_flow(
+        simulate_historical_flow(
             book,
-            steps=steps,
-            sleep=0,
+            prices,
             market_maker=mm,
             imbalance_trader=it,
             informed_trader=informed,
@@ -201,8 +203,7 @@ def plot_demo_scenario(
     schedule: List[Tuple[int, int, Side]] = DEFAULT_SCHEDULE,
     save_path: str = "images/informed_trader_demo.png",
 ) -> Figure:
-    """P&L split over time with the informed windows shaded - the direct
-    'watch inventory_pnl go negative' visual."""
+    """plot of the previous function"""
     fig, ax = plt.subplots(figsize=(10, 5))
 
     ax.plot(history.spread_pnl, label="Spread P&L", color="tab:blue")

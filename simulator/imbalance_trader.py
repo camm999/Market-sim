@@ -5,13 +5,12 @@ from lob.book import LimitOrderBook, Side
 
 class ImbalanceTrader:
     """
-    A simple momentum trader that reacts to order book imbalance.
+    simple momentum trader that reacts to order book imbalance.
 
-    Where MarketMaker leans its quotes AGAINST its own inventory to stay
-    flat, this agent leans WITH the book's imbalance: when there's much
+    this agent leans WITH the book's imbalance: when there's much
     more resting size on the bid than the ask, that pressure often
     precedes the price getting pushed up, so it hits the market with a
-    buy to ride that move (and mirrors the logic on the sell side).
+    buy to ride that move, vice versa for ask imbalance.
     """
 
     def __init__(self, threshold: float = 0.4, size: int = 5, max_inventory: int = 50) -> None:

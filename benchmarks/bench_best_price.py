@@ -1,8 +1,7 @@
 # benchmarks/bench_best_price.py
 """
-Compares the old approach (max()/min() over every price level) against
+compares the old approach (max()/min() over every price level) against
 the heap-based lookup now used in LimitOrderBook._best_bid()/_best_ask(),
-across a growing number of price levels.
 
 Run: python benchmarks/bench_best_price.py
 """
@@ -14,13 +13,13 @@ import time
 
 def bench_dict_max(n_levels: int, n_calls: int) -> float:
     """The old approach: O(n) scan over every price level on every call."""
-    # Build a dict of n_levels random "prices" -> dummy value, same shape as
-    # LimitOrderBook.bids. Values don't matter here, only the keys (prices).
+    # build a dict of n_levels random "prices" -> dummy value, same shape as
+    # LimitOrderBook.bids, values don't matter here, only the keys (prices).
     d = {float(p): 1 for p in random.sample(range(1, 1_000_000), n_levels)}
 
     start = time.perf_counter()
     for _ in range(n_calls):
-        max(d.keys())  # O(n): has to look at every key to find the biggest one
+        max(d.keys())  # O(n), has to look at every key to find the biggest one
     return time.perf_counter() - start  # total time for n_calls lookups
 
 

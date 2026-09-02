@@ -7,25 +7,22 @@ from lob.book import LimitOrderBook, Side
 
 class InformedTrader:
     """
-    Fed a ground-truth schedule of future price-drift windows at
-    construction — the simplest possible stand-in for a short-term
-    informational edge — and simply trades a market order in that
-    direction every step a window is active. Its own order flow is what
-    causes the drift: real informed flow moves prices precisely because
-    it trades ahead of information the rest of the market doesn't have
-    yet, so this isn't a hack, it's the mechanism.
+    fed a ground-truth schedule of future price-drift windows at
+    construction, resembles informational edge.
+    
+    under simulate_random_flow its own order flow is what causes the drift 
 
-    Tracks its own step count internally (incremented once per `act()`
+    under simulate_historical_flow with a gbm_flow scheduled-drift path, the
+    same schedule instead drives an exogenous anchor price, so the drift
+    is genuine rather than self-caused.
+
+    tracks step count internally (incremented once per `act()`
     call) rather than taking a step argument, so its call signature
-    matches ImbalanceTrader's `act(book)` and it plugs into
-    simulate_random_flow the same way. This assumes `act()` is called
-    exactly once per simulation step, in order — true of every agent in
-    this codebase today.
+    matches ImbalanceTrader's `act(book)`. assumes `act()` is called
+    exactly once per simulation step, in order.
 
-    Unlike the other agents, `max_inventory` defaults to None (uncapped):
-    risk-capping is a liquidity-provider concept, and an informed trader
-    riding a confirmed signal window is expected to run its full size for
-    the full window rather than stopping partway through it.
+    unlike the other agents, `max_inventory` defaults to None (uncapped):
+    risk-capping is a liquidity-provider concept.
     """
 
     def __init__(

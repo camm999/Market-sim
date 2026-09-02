@@ -20,7 +20,7 @@ class Metrics:
         self._trades_seen = 0
 
     def update(self, book: LimitOrderBook) -> None:
-        """Extract metrics from the current state of the LOB."""
+        """extract metrics from the current state of the LOB."""
 
         mid = book.mid_price()
         self.mid_prices.append(mid)
@@ -51,12 +51,12 @@ class Metrics:
         self._trades_seen = len(book.trades)
 
     def record_trade(self, price: float, size: int) -> None:
-        """Record trade events."""
+        """record trade events."""
         self.trade_prices.append(price)
         self.trade_sizes.append(size)
 
     def plot(self, save_path: Optional[str] = None) -> Figure:
-        """Plot mid-price, spread and imbalance over the simulation."""
+        """plot mid-price, spread and imbalance over the simulation."""
 
         fig, axes = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
 

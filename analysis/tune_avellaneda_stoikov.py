@@ -2,12 +2,14 @@
 """
 compare_strategies.py's AvellanedaStoikovMarketMaker sweep runs against
 gamma/k picked to keep this sim's price scale stable, not tuned for
-performance. This sweeps gamma (risk aversion) and k (order-arrival decay)
-across a grid (ImbalanceTrader held fixed, same config as compare_strategies.py)
-the same way tune_market_maker.py sweeps MarketMaker's own spread/max_inventory,
-to check whether tuning closes more of the gap to ImbalanceTrader - gamma/k
-aren't comparable to spread/max_inventory, so this is a separate script
+performance. 
+
+also has same config as compare_strategies.py
+
+gamma/k aren't comparable to spread/max_inventory, so this is a separate script
 rather than an extra axis on the same grid.
+
+each run is Anchored to a GARCH(1,1)/ Student-t GBM price path
 
 Run (from the project root): python -m analysis.tune_avellaneda_stoikov
 """
@@ -24,7 +26,8 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
 from lob.book import LimitOrderBook
-from simulator.random_flow import simulate_random_flow
+from simulator.gbm_flow import generate_garch_gbm_path
+from simulator.historical_flow import simulate_historical_flow
 from simulator.avellaneda_stoikov import AvellanedaStoikovMarketMaker
 from simulator.imbalance_trader import ImbalanceTrader
 
@@ -43,8 +46,9 @@ class SweepResult:
 
 
 def run_one(gamma: float, k: float, seed: int, steps: int = STEPS) -> float:
-    """One simulation under one (gamma, k) config and one seed; returns
-    AvellanedaStoikovMarketMaker's final mark-to-market P&L."""
+    """one simulation under one (gamma, k) config and one seed; returns
+    AvellanedaStoikovMarketMaker's final mark-to-market P&L. """
+    prices = generate_garch_gbm_path(steps, seed)
     random.seed(seed)
 
     book = LimitOrderBook()
@@ -52,7 +56,7 @@ def run_one(gamma: float, k: float, seed: int, steps: int = STEPS) -> float:
     it = ImbalanceTrader(threshold=0.4, size=5, max_inventory=50)  # held fixed throughout
 
     with contextlib.redirect_stdout(io.StringIO()):
-        simulate_random_flow(book, steps=steps, sleep=0, market_maker=mm, imbalance_trader=it)
+        simulate_historical_flow(book, prices, market_maker=mm, imbalance_trader=it)
 
     return mm.mark_to_market(book)
 

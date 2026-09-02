@@ -2,13 +2,8 @@
 """
 Runs MarketMaker and AvellanedaStoikovMarketMaker against a real historical
 price series (BTCUSDT 1-minute closes from Binance, see data/btcusdt_1m.csv)
-instead of random_flow.py's synthetic random walk, so every agent's
-fair-value process is exogenous and genuinely can't be influenced by their
-own quotes - the assumption AvellanedaStoikovMarketMaker's docstring and the
-README's "Is this actually HFT?" section both flag this sim as missing
-everywhere else. See simulator/historical_flow.py's module docstring for
-what this backtest can and can't claim about "real" data: prices are real,
-order arrivals are still synthetic.
+so agents fair-value process is exogenous and genuinely can't be influenced by their
+own quotes, see end of README 
 
 Run (from the project root): python -m analysis.historical_backtest
 """
@@ -66,12 +61,9 @@ def plot_price_tracking(
     as_metrics: Metrics,
     save_path: str = "images/historical_backtest_price.png",
 ) -> Figure:
-    """Real (rescaled) price path vs. each market maker's own simulated
-    book mid. Both books are anchored to the identical real price series,
-    so any gap between the two mid lines isn't noise - it's a direct read
-    on which market maker's own resting quotes perturb the book furthest
-    from the true exogenous price, the question the README's "An exogenous
-    price process" HFT-gap bullet raises but doesn't otherwise measure."""
+    """real (rescaled) price path vs. each market maker's own simulated
+    book mid. gives direct read on which market maker's own resting quotes 
+    perturb the book furthest from the true exogenous price """
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.plot(prices, label="Real BTCUSDT price (rescaled)", color="tab:blue", linewidth=2)
     # book.mid_price() always returns a float (falls back to 100, never
@@ -92,10 +84,8 @@ def plot_price_tracking(
 
 
 def mean_abs_deviation(prices: List[float], mid_prices: List[float]) -> float:
-    """How far a book's mid strayed from the real anchor it was quoting
-    against, on average - a direct measure of how much a market maker's
-    own resting quotes perturbed the book away from the true exogenous
-    price (see plot_price_tracking's docstring)."""
+    """how far on average a books mid strayed from the real anchor it was quoting
+    against"""
     return sum(abs(m - p) for m, p in zip(mid_prices, prices)) / len(prices)
 
 

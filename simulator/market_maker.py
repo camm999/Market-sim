@@ -8,31 +8,19 @@ from lob.book import LimitOrderBook, Order
 
 class MarketMaker:
     """
-    A simple two-sided market maker.
+    simple two-sided market maker
 
-    Each step it settles fills on last step's resting quotes, cancels
-    whatever's left of them, then posts a fresh bid and ask straddling the
-    mid price. It earns the spread on round trips, but every fill also
-    moves its inventory — so quotes are skewed against that inventory
-    (long -> quote lower, short -> quote higher) to lean back towards flat
-    instead of letting risk build up unbounded.
+    each step settles fills on last step's resting quotes, cancels
+    what's left of them, then posts a fresh bid/ask straddling the mid.
+    
+    quoted width widens with recent realized volatility (`vol_coef`)
+    and skews against inventory (`skew_coef`) to lean back toward flat.
 
-    The quoted width isn't fixed either: it widens with recent realized
-    volatility (the rolling stdev of the last `vol_window` trade prices),
-    so it quotes tighter in a calm market and pulls back when prices start
-    whipping around. `skew_coef` scales how hard inventory skews the
-    quotes (0 disables it entirely) — a separate knob from `vol_coef`, so
-    the two can be tested independently.
-
-    P&L is tracked in two pieces, not just as one mark-to-market total:
-    `spread_pnl` is the edge captured on each fill relative to the mid the
-    quote was centered on at the time it was posted — profit from
-    providing liquidity, independent of where price goes afterwards.
-    `inventory_pnl()` is the rest: the mark-to-market swing on whatever's
-    been carried since each fill, as fair value has moved since then. The
-    two always sum to `mark_to_market()`, and splitting them apart is what
-    shows whether a run's P&L came from genuinely earning the spread or
-    from getting picked off by informed flow and then riding the position.
+    P&L splits into `spread_pnl` (edge captured per fill vs. the mid it
+    was quoted around) and `inventory_pnl()` (mark-to-market swing on
+    the carried position since then), shows whether P&L
+    came from earning the spread or from getting picked off by
+    flow and riding the position.
     """
 
     def __init__(
@@ -70,16 +58,16 @@ class MarketMaker:
         return order_id
 
     def _apply_fill(self, filled: int, price: float, is_buy: bool, ref_mid: float) -> None:
-        if filled <= 0:  # no fill
+        if filled <= 0:  
             return
         if is_buy:
-            self.inventory += filled  # dec cash
+            self.inventory += filled  
             self.cash -= filled * price
-            self.spread_pnl += filled * (ref_mid - price)  # bought below fair value = edge
+            self.spread_pnl += filled * (ref_mid - price)  
         else:
             self.inventory -= filled
             self.cash += filled * price  # inc cash
-            self.spread_pnl += filled * (price - ref_mid)  # sold above fair value = edge
+            self.spread_pnl += filled * (price - ref_mid)
 
     def _apply_fills_from_trades(
         self, trades: List[Tuple[float, int]], is_buy: bool, ref_mid: float
@@ -96,30 +84,26 @@ class MarketMaker:
         return statistics.pstdev(recent_prices)
 
     def _compute_quote_prices(self, book: LimitOrderBook, mid: float) -> Tuple[int, int]:
-        """Bid/ask around mid: base spread widened by recent volatility, then
-        skewed against inventory. Split out from `quote()` so a subclass can
-        swap in a different quoting model (e.g. Avellaneda-Stoikov) while
-        reusing all the settle/cancel/repost/P&L plumbing unchanged."""
+        """bid/ask around mid, base spread widened by recent volatility, then
+        skewed against inventory"""
         volatility = self._realized_volatility(book)
         effective_spread = self.spread + self.vol_coef * volatility
         half = effective_spread / 2
-        # Skew: positive inventory nudges both quotes down so we sell rather than buy more.
+        # (skew) positive inventory nudges both quotes down so we sell rather than buy more.
         skew = self.skew_coef * (self.inventory / self.max_inventory) * half if self.max_inventory else 0
         return round(mid - half - skew), round(mid + half - skew)
 
     def mark_to_market(self, book: LimitOrderBook) -> float:
-        """Cash plus the value of current inventory at the current mid price."""
+        """cash plus the value of current inventory at the current mid price."""
         mid = book.mid_price() or 0
         return self.cash + self.inventory * mid  # position value at mid price
 
     def inventory_pnl(self, book: LimitOrderBook) -> float:
-        """The rest of mark_to_market once spread_pnl is backed out — P&L from
-        carrying inventory as fair value has moved since each fill. Always
-        satisfies spread_pnl + inventory_pnl(book) == mark_to_market(book)."""
+        """satisfies spread_pnl + inventory_pnl(book) == mark_to_market(book)."""
         return self.mark_to_market(book) - self.spread_pnl
 
     def quote(self, book: LimitOrderBook) -> None:
-        """Settle fills, cancel stale quotes, and post fresh ones around mid."""
+        """settle fills, cancel stale quotes, and post fresh ones around mid."""
 
         # Book whatever filled on last step's resting orders since they were posted,
         # crediting spread_pnl against the mid those orders were quoted around.
