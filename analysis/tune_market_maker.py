@@ -2,7 +2,7 @@
 """
 compare_strategies.py found MarketMaker losing to ImbalanceTrader across
 200 seeds. This sweeps MarketMaker's spread and max_inventory across a
-grid to check if theres a tuning problem.
+grid to check if there's a tuning problem.
 
 Each run is Anchored to a GARCH(1,1)/ Student-t GBM price path  
 

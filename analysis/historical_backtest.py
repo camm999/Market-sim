@@ -2,8 +2,8 @@
 """
 Runs MarketMaker and AvellanedaStoikovMarketMaker against a real historical
 price series (BTCUSDT 1-minute closes from Binance, see data/btcusdt_1m.csv)
-so agents fair-value process is exogenous and genuinely can't be influenced by their
-own quotes, see end of README 
+so the agents' fair-value process is exogenous and genuinely can't be influenced by their
+own quotes, see ANALYSIS.md
 
 Run (from the project root): python -m analysis.historical_backtest
 """
@@ -84,7 +84,7 @@ def plot_price_tracking(
 
 
 def mean_abs_deviation(prices: List[float], mid_prices: List[float]) -> float:
-    """how far on average a books mid strayed from the real anchor it was quoting
+    """how far on average a book's mid strayed from the real anchor it was quoting
     against"""
     return sum(abs(m - p) for m, p in zip(mid_prices, prices)) / len(prices)
 

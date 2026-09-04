@@ -33,12 +33,7 @@ from simulator.random_flow import simulate_random_flow
 
 # Best-scoring grid cells from the multi-seed tuning sweeps (50 seeds each,
 # 500 steps), re-run against a GARCH(1,1)/Student-t GBM exogenous price path
-# (simulator/gbm_flow.py) rather than simulate_random_flow's self-referential walk - see README's
-# "Tuning against an exogenous price" section for why, and for the old
-# self-referential-walk numbers these replaced. Params the sweep didn't vary
-# are included too (at the value the sweep held them fixed at), so clicking
-# the button resets a run to the actual best-known config rather than only
-# touching the swept axes.
+# (simulator/gbm_flow.py) rather than simulate_random_flow's self-referential walk 
 BEST_LINEAR: Dict[str, float] = {"size": 5, "max_inventory": 50, "spread": 8, "vol_coef": 1.0, "skew_coef": 1.0}
 BEST_LINEAR_STATS = "mean P&L ≈ 2405.79, 92% profitable"
 BEST_AVELLANEDA: Dict[str, float] = {"size": 5, "max_inventory": 50, "gamma": 0.001, "k": 0.5}
@@ -46,11 +41,11 @@ BEST_AVELLANEDA_STATS = "mean P&L ≈ 1438.45, 86% profitable"
 
 
 def _apply_best_params() -> None:
-    """Seed the relevant widgets' session_state with the best-known config
-    for whichever model is currently selected. Must run as a button's
-    on_click callback (which fires before the widgets below are re-created
-    on the resulting rerun) rather than inline in the script body, or
-    Streamlit would ignore the new values until the rerun after this one."""
+    """gives session_state with the best-known config for selected model.
+    Must run as a button's on_click callback (which fires before
+    the widgets below are re-created on the resulting rerun) rather than inline 
+    in the script body, or Streamlit would ignore the new values until
+    the rerun after this one."""
     best = BEST_LINEAR if st.session_state["mm_type"] == "Linear heuristic (MarketMaker)" else BEST_AVELLANEDA
     for key, value in best.items():
         st.session_state[key] = value
@@ -61,7 +56,7 @@ def _informed_schedule(steps: int) -> List[Tuple[int, int, Side]]:
     checked, a quarter and three-quarters of the way through the run. Shared between
     InformedTrader's own construction and generate_scheduled_drift_garch_gbm_path's anchor below,
     so a GBM-anchored run's price actually drifts during the same window InformedTrader
-    trades in, instead of the two silently disagreeing see readme  for why that matters."""
+    trades in, see read me"""
     w1_start, w1_end = steps // 4, steps // 4 + 50
     w2_start, w2_end = 3 * steps // 4, 3 * steps // 4 + 50
     return [(w1_start, w1_end, "buy"), (w2_start, w2_end, "sell")]
@@ -84,13 +79,9 @@ def _build_market_maker(cfg: Dict, steps: int) -> MarketMaker:
 def _run_config(
     cfg: Dict, seed: int, steps: int, use_gbm: bool, prices: Optional[List[float]]
 ) -> Tuple[MarketMaker, LimitOrderBook, Metrics, PnLHistory]:
-    """Run one full sim for one comparison-tab config, on its own book,
-    reseeded identically to whatever the other config in the comparison
-    gets - the same reseed-then-diverge pattern analysis/compare_strategies.py's
-    run_once uses, so both sides see the identical input order flow. When
-    use_gbm is set, prices (generated once per seed by the caller, shared
-    between both configs) anchors both sides to the identical exogenous
-    GBM path too - not just the identical seed."""
+    """Run one full sim for one comparison tab config, on its own book,
+    identical reseed to other config allows for strategic logic to move book.
+    When use_gbm is set, prices also anchor to the GBM path, not just the identical seed."""
     random.seed(seed)
     book = LimitOrderBook()
     mm = _build_market_maker(cfg, steps)
@@ -130,8 +121,8 @@ def _run_config(
 
 
 def _config_inputs(label: str, key_prefix: str, default_model: str) -> Dict:
-    """Render one side's (A or B) full config controls and return them as a
-    dict, in whichever st.columns context this is called from."""
+    """render one side's (A or B) full config controls and return them as a
+    dict"""
     st.markdown(f"**{label}**")
     model = st.radio(
         "Model",
@@ -184,10 +175,9 @@ def _config_inputs(label: str, key_prefix: str, default_model: str) -> Dict:
 st.set_page_config(page_title="market_sim", layout="wide")
 st.title("market_sim: interactive dashboard")
 st.caption(
-    "A thin UI over the existing simulation code — every control here maps directly "
+    "A thin UI over the existing simulation code, every control here maps directly "
     "to a constructor argument on `MarketMaker`/`AvellanedaStoikovMarketMaker` or "
-    "`simulate_random_flow`/`simulate_historical_flow`. See the README for what each "
-    "parameter actually does."
+    "`simulate_random_flow`/`simulate_historical_flow`. See Streamlit On ReadME."
 )
 
 tab_single, tab_compare = st.tabs(["Single run", "Compare configurations"])
@@ -198,11 +188,7 @@ with st.sidebar:
         "Use GBM exogenous price path",
         value=False,
         help="Anchor order flow to a synthetic GARCH(1,1)/Student-t Geometric Brownian Motion "
-        "price path (fat tails and volatility clustering, calibrated off data/btcusdt_1m.csv - "
-        "see simulator/gbm_flow.py) instead of simulate_random_flow's self-generated random walk, "
-        "so the fair-value process agents trade against is genuinely exogenous and can't be "
-        "influenced by the market maker's own quotes. Generated fresh from the seed below, so — "
-        "unlike a fixed historical series — every seed gets its own independent price path.",
+        "It prevents market maker from influencing the price path. See README for details",
     )
     steps = st.slider("Steps", min_value=100, max_value=1000, value=500, step=50)
     seed = st.number_input("Random seed", min_value=0, value=42, step=1)
@@ -325,10 +311,9 @@ with tab_single:
             mean_deviation = sum(deviations) / len(deviations) if deviations else 0.0
             st.metric("Mean |book mid − GBM anchor|", f"{mean_deviation:.3f}")
             st.caption(
-                "How far this market maker's own book mid strayed from the synthetic, exogenous "
-                "GBM price it was quoting against, on average — a direct measure of "
-                "self-influence. 0 would mean the market maker's quotes never moved the book "
-                "away from the anchor price."
+                "How far this market maker's own book mid strayed from the synthetic "
+                "GBM price it was quoting against, on average, i.e  0 would mean the"
+                " market maker's quotes never moved the book away from the anchor price."
             )
 
         col1, col2 = st.columns(2)
@@ -359,7 +344,7 @@ with tab_single:
             st.pyplot(fig)
             st.caption(
                 "Any gap between the two lines is the market maker's own resting quotes "
-                "perturbing the book away from the true, exogenous price — not noise, since "
+                "perturbing the book away from the actual exogenous price. This is not noise, since "
                 "both are driven by the identical GBM path."
             )
 
@@ -371,7 +356,7 @@ with tab_single:
 
         if mm_type == "Avellaneda-Stoikov":
             st.caption(
-                "Note: half-spread and reservation price aren't plotted here — "
+                "Note: half-spread and reservation price aren't plotted here, "
                 "see analysis/avellaneda_stoikov_demo.py for the horizon-decay chart."
             )
     else:
@@ -380,10 +365,10 @@ with tab_single:
 with tab_compare:
     st.caption(
         "Run two market-maker configurations against identical input order flow (same "
-        "seed(s), separate books) and compare their P&L head-to-head — the same "
-        "reseed-then-diverge pattern `analysis/compare_strategies.py` uses. Toggle a GBM "
+        "seed(s), separate books) and compare their P&L head-to-head, the same "
+        "'reseed then diverge' pattern `analysis/compare_strategies.py` uses. Toggle a GBM "
         "exogenous price path below to remove the mid-price self-influence bias from the "
-        "comparison too, not just from single runs."
+        "comparison too."
     )
 
     top1, top2, top3 = st.columns(3)
@@ -418,9 +403,7 @@ with tab_compare:
         detail_a = detail_b = None
         detail_prices: Optional[List[float]] = None
 
-        # Fixed for the whole sweep (doesn't depend on seed) - either config checking "Informed
-        # trader" uses this identical schedule (_run_config builds InformedTrader from the same
-        # helper), so if either one is on, the GBM anchor below needs to drift there too.
+        # fixed for the whole sweep (doesn't depend on seed since same schedule)
         informed_schedule = (
             _informed_schedule(cmp_steps) if (cfg_a["use_informed"] or cfg_b["use_informed"]) else None
         )
@@ -428,9 +411,9 @@ with tab_compare:
         progress = st.progress(0.0, text=f"Running seed 1/{n_seeds}...")
         for i in range(n_seeds):
             seed_i = int(base_seed) + i
-            # A fresh GBM path per seed, shared between A and B, rather than one fixed path reused
-            # across the sweep - matches analysis/compare_strategies.py's run_once, and is the reason
-            # GBM replaced the old fixed-historical-series option (see README).
+            # A fresh GBM path per seed shared between A and B, rather than one fixed path reused
+            # and matches analysis/compare_strategies.py's run_once
+        
             if cmp_use_gbm:
                 if informed_schedule is not None:
                     prices_i = generate_scheduled_drift_garch_gbm_path(

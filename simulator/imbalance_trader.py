@@ -30,7 +30,7 @@ class ImbalanceTrader:
         return (bid_depth - ask_depth) / total
 
     def _execute_market_order(self, book: LimitOrderBook, side: Side) -> None:
-        """Send a market order and work out what it actually filled from the new trades."""
+        """send a market order and work out what it actually filled from the new trades."""
         start = len(book.trades)
         book.add_market_order(side, self.size)
         new_trades = book.trades[start:]
@@ -49,7 +49,7 @@ class ImbalanceTrader:
             self.cash += filled * avg_price
 
     def act(self, book: LimitOrderBook) -> None:
-        """Check the book's imbalance and, if it's strong enough, trade with it."""
+        """check the book's imbalance and, if it's strong enough, trade with it."""
         imbalance = self._imbalance(book)
 
         if imbalance > self.threshold and self.inventory < self.max_inventory:
@@ -59,6 +59,6 @@ class ImbalanceTrader:
             self._execute_market_order(book, "sell")
 
     def mark_to_market(self, book: LimitOrderBook) -> float:
-        """Cash plus the value of current inventory at the current mid price."""
+        """cash plus the value of current inventory at the current mid price."""
         mid = book.mid_price() or 0
         return self.cash + self.inventory * mid

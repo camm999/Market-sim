@@ -19,11 +19,11 @@ def _gbm_next_price(price: float, mu: float, sigma: float, rng: random.Random) -
 
 
 def generate_gbm_path(steps: int, seed: int, mu: float = 0.0, sigma: float = 0.02, base: float = 100.0) -> List[float]:
-    """per step vol in the same ballpark as random_flow.py's,generates orders priced at
+    """per step vol in the same ballpark as random_flow.py's, generates orders priced at
     mid + random.randint(-3, 3), this sigma allows similar price movement.
 
-    ssing a fresh, isolated random.Random(seed) instance means generating the price path is fully
-    independent, doesnt interact with other seeds"""
+    Using a fresh, isolated random.Random(seed) instance means generating the price path is fully
+    independent, doesn't interact with other seeds"""
     rng = random.Random(seed)
     prices = [base]
     for _ in range(steps - 1):
@@ -62,7 +62,7 @@ def generate_scheduled_drift_gbm_path(
 
 def _student_t_z(nu: float, rng: random.Random) -> float:
     """A standard (var=1) student-t(nu) draw, Z / sqrt(V/nu) with Z ~ N(0, 1) and
-    V ~ Chi2(nu) (equivilent to Gamma(nu/2, 2)), then rescaled by sqrt((nu-2)/nu) - raw student-t(nu)
+    V ~ Chi2(nu) (equivalent to Gamma(nu/2, 2)), then rescaled by sqrt((nu-2)/nu) - raw student-t(nu)
     has variance nu/(nu-2), not 1, GARCH requires variance 1"""
     z = rng.gauss(0, 1)
     v = rng.gammavariate(nu / 2, 2.0)

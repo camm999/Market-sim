@@ -1,5 +1,5 @@
 # metrics/pnl_history.py
-"""tracks a marker makers p&l, split into spread capture vs. inventory risk, over time."""
+"""tracks a market maker's P&L, split into spread capture vs. inventory risk, over time."""
 
 from typing import List, Optional
 
