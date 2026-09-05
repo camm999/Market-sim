@@ -4,15 +4,16 @@ import statistics
 from typing import List, Optional, Tuple
 
 from lob.book import LimitOrderBook, Order
+from simulator.agent import Agent
 
 
-class MarketMaker:
+class MarketMaker(Agent):
     """
     simple two-sided market maker
 
     each step settles fills on last step's resting quotes, cancels
     what's left of them, then posts a fresh bid/ask straddling the mid.
-    
+
     quoted width widens with recent realized volatility (`vol_coef`)
     and skews against inventory (`skew_coef`) to lean back toward flat.
 
@@ -33,6 +34,7 @@ class MarketMaker:
         vol_coef: float = 1.0,
         skew_coef: float = 1.0,
     ) -> None:
+        super().__init__()
         self.next_order_id = order_id_start
         self.spread = spread  # base quoted width around mid, before volatility widening
         self.size = size  # size posted on each side
@@ -41,8 +43,6 @@ class MarketMaker:
         self.vol_coef = vol_coef  # spread added per unit of realized volatility
         self.skew_coef = skew_coef  # multiplier on inventory-based quote skew; 0 disables it
 
-        self.inventory = 0  # net position: +long, -short
-        self.cash = 0.0  # running cash flow from fills
         self.spread_pnl = 0.0  # cumulative edge captured vs. mid at each fill's quote time
 
         self.bid_order: Optional[Order] = None
@@ -58,12 +58,12 @@ class MarketMaker:
         return order_id
 
     def _apply_fill(self, filled: int, price: float, is_buy: bool, ref_mid: float) -> None:
-        if filled <= 0:  
+        if filled <= 0:
             return
         if is_buy:
-            self.inventory += filled  
+            self.inventory += filled
             self.cash -= filled * price
-            self.spread_pnl += filled * (ref_mid - price)  
+            self.spread_pnl += filled * (ref_mid - price)
         else:
             self.inventory -= filled
             self.cash += filled * price  # inc cash
@@ -93,11 +93,6 @@ class MarketMaker:
         skew = self.skew_coef * (self.inventory / self.max_inventory) * half if self.max_inventory else 0
         return round(mid - half - skew), round(mid + half - skew)
 
-    def mark_to_market(self, book: LimitOrderBook) -> float:
-        """cash plus the value of current inventory at the current mid price."""
-        mid = book.mid_price() or 0
-        return self.cash + self.inventory * mid  # position value at mid price
-
     def inventory_pnl(self, book: LimitOrderBook) -> float:
         """satisfies spread_pnl + inventory_pnl(book) == mark_to_market(book)."""
         return self.mark_to_market(book) - self.spread_pnl
@@ -124,9 +119,7 @@ class MarketMaker:
         self.bid_order = None
         self.ask_order = None
 
-        mid = book.mid_price()
-        if mid is None:
-            return
+        mid = book.mid_price()  # always a float; falls back to last_mid on an empty book
 
         bid_price, ask_price = self._compute_quote_prices(book, mid)
 

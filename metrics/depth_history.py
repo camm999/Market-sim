@@ -15,7 +15,7 @@ class DepthHistory:
     tracks resting size at each price level, relative to the mid price, at
     every step of a simulation. Unlike Metrics,
      this keeps a full per-level snapshot each step
-    so it can be displayed as books depth heatmap over time. 
+    so it can be displayed as books depth heatmap over time.
 
     prices are stored as an *offset from mid* rather than an absolute price,
     since mid drifts over a run (random walk)
@@ -28,7 +28,7 @@ class DepthHistory:
         self.frames: List[np.ndarray] = []
 
     def update(self, book: LimitOrderBook) -> None:
-        """snapshot  resting depth by price offset from mid. Bids are 
+        """snapshot  resting depth by price offset from mid. Bids are
          positive size, asks as negative size, so a single heatmap can
         show colormap."""
         mid = book.mid_price()

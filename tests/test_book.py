@@ -257,3 +257,119 @@ def test_mid_price_falls_back_to_last_known_mid_once_book_empties():
     book.cancel_order(1)  # clears the bid side too
 
     assert book.mid_price() == 100
+
+
+# ---- index / depth invariants ----
+
+
+def resting_orders(book):
+    """every order object actually sitting on the book right now."""
+    return [o for side in (book.bids, book.asks) for queue in side.values() for o in queue]
+
+
+def assert_invariants(book):
+    """order_index holds exactly the resting orders, and the cached depth totals agree
+    with a full walk of the book. Both used to drift: fills reached by a market order,
+    and limit orders fully filled on arrival, were left behind in order_index forever.
+    """
+    resting = resting_orders(book)
+    assert set(book.order_index) == {o.id for o in resting}
+    assert book.bid_depth() == sum(sum(o.size for o in q) for q in book.bids.values())
+    assert book.ask_depth() == sum(sum(o.size for o in q) for q in book.asks.values())
+
+
+def test_order_index_drops_orders_consumed_by_a_market_order():
+    book = make_book()
+    book.add_limit_order(Order(1, "sell", 101, 5))
+    book.add_market_order("buy", 5)
+
+    assert book.asks == {}
+    assert_invariants(book)
+
+
+def test_order_index_drops_a_limit_order_fully_filled_on_arrival():
+    book = make_book()
+    book.add_limit_order(Order(1, "sell", 101, 5))
+    book.add_limit_order(Order(2, "buy", 101, 5))  # crosses and fills completely, never rests
+
+    assert_invariants(book)
+
+
+def test_cancelling_an_already_filled_order_reports_it_as_gone():
+    book = make_book()
+    book.add_limit_order(Order(1, "sell", 101, 5))
+    book.add_market_order("buy", 5)
+
+    assert book.cancel_order(1) is None  # not "False" from a half-present index entry
+
+
+def test_partially_filled_order_stays_indexed_with_its_remaining_size():
+    book = make_book()
+    book.add_limit_order(Order(1, "sell", 101, 10))
+    book.add_market_order("buy", 4)
+
+    assert 1 in book.order_index
+    assert book.ask_depth() == 6
+    assert_invariants(book)
+
+
+def test_invariants_hold_across_a_long_mixed_run():
+    """the leak only showed up in aggregate, so drive a few thousand mixed operations."""
+    import random
+
+    rng = random.Random(11)
+    book = make_book()
+    live = []
+
+    for order_id in range(1, 2001):
+        roll = rng.random()
+        if roll < 0.6:
+            side = rng.choice(["buy", "sell"])
+            order = Order(order_id, side, 100 + rng.randint(-4, 4), rng.randint(1, 10))
+            book.add_limit_order(order)
+            live.append(order_id)
+        elif roll < 0.85:
+            book.add_market_order(rng.choice(["buy", "sell"]), rng.randint(1, 10))
+        elif live:
+            book.cancel_order(live.pop(rng.randrange(len(live))))
+
+    assert_invariants(book)
+    assert len(book.order_index) < 2000  # i.e. it isn't just accumulating everything
+
+
+def test_heaps_do_not_grow_without_bound():
+    """lazy deletion leaves stale prices behind, so the heaps get compacted."""
+    book = make_book()
+    for order_id in range(1, 1001):
+        price = 100 + (order_id % 40)
+        book.add_limit_order(Order(order_id, "buy", price, 5))
+        book.cancel_order(order_id)  # empties the level again, leaving a stale heap entry
+
+    assert len(book._bid_heap) <= 2 * len(book.bids) + book._HEAP_COMPACT_SLACK + 1
+
+
+# ---- depth and imbalance ----
+
+
+def test_imbalance_is_signed_toward_the_heavier_side():
+    book = make_book()
+    book.add_limit_order(Order(1, "buy", 99, 30))
+    book.add_limit_order(Order(2, "sell", 101, 10))
+
+    assert book.imbalance() == (30 - 10) / 40
+
+
+def test_imbalance_is_zero_on_an_empty_book():
+    assert make_book().imbalance() == 0.0
+
+
+def test_depth_can_be_limited_to_the_best_levels():
+    book = make_book()
+    book.add_limit_order(Order(1, "buy", 99, 10))  # best bid
+    book.add_limit_order(Order(2, "buy", 98, 5))
+    book.add_limit_order(Order(3, "buy", 50, 100))  # far from the touch, never going to trade
+    book.add_limit_order(Order(4, "sell", 101, 10))
+
+    assert book.bid_depth() == 115  # whole book
+    assert book.bid_depth(levels=2) == 15  # two best levels only
+    assert book.imbalance(levels=2) == (15 - 10) / 25

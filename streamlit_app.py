@@ -33,7 +33,7 @@ from simulator.random_flow import simulate_random_flow
 
 # Best-scoring grid cells from the multi-seed tuning sweeps (50 seeds each,
 # 500 steps), re-run against a GARCH(1,1)/Student-t GBM exogenous price path
-# (simulator/gbm_flow.py) rather than simulate_random_flow's self-referential walk 
+# (simulator/gbm_flow.py) rather than simulate_random_flow's self-referential walk
 BEST_LINEAR: Dict[str, float] = {"size": 5, "max_inventory": 50, "spread": 8, "vol_coef": 1.0, "skew_coef": 1.0}
 BEST_LINEAR_STATS = "mean P&L ≈ 2405.79, 92% profitable"
 BEST_AVELLANEDA: Dict[str, float] = {"size": 5, "max_inventory": 50, "gamma": 0.001, "k": 0.5}
@@ -43,7 +43,7 @@ BEST_AVELLANEDA_STATS = "mean P&L ≈ 1438.45, 86% profitable"
 def _apply_best_params() -> None:
     """gives session_state with the best-known config for selected model.
     Must run as a button's on_click callback (which fires before
-    the widgets below are re-created on the resulting rerun) rather than inline 
+    the widgets below are re-created on the resulting rerun) rather than inline
     in the script body, or Streamlit would ignore the new values until
     the rerun after this one."""
     best = BEST_LINEAR if st.session_state["mm_type"] == "Linear heuristic (MarketMaker)" else BEST_AVELLANEDA
@@ -82,7 +82,7 @@ def _run_config(
     """Run one full sim for one comparison tab config, on its own book,
     identical reseed to other config allows for strategic logic to move book.
     When use_gbm is set, prices also anchor to the GBM path, not just the identical seed."""
-    random.seed(seed)
+    rng = random.Random(seed)  # own generator per run, see simulator/rng.py
     book = LimitOrderBook()
     mm = _build_market_maker(cfg, steps)
     imbalance_trader = (
@@ -105,6 +105,7 @@ def _run_config(
                 informed_trader=informed_trader,
                 metrics=metrics,
                 pnl_history=pnl_history,
+                rng=rng,
             )
         else:
             simulate_random_flow(
@@ -116,6 +117,7 @@ def _run_config(
                 informed_trader=informed_trader,
                 metrics=metrics,
                 pnl_history=pnl_history,
+                rng=rng,
             )
     return mm, book, metrics, pnl_history
 
@@ -244,7 +246,7 @@ with st.sidebar:
 
 with tab_single:
     if run:
-        random.seed(int(seed))
+        run_rng = random.Random(int(seed))  # own generator per run, see simulator/rng.py
         book = LimitOrderBook()
 
         mm: MarketMaker
@@ -273,7 +275,7 @@ with tab_single:
         depth_history = DepthHistory()
         pnl_history = PnLHistory()
 
-        prices = None
+        prices: Optional[List[float]] = None
         if use_gbm:
             if informed_schedule is not None:
                 prices = generate_scheduled_drift_garch_gbm_path(
@@ -290,6 +292,7 @@ with tab_single:
                     informed_trader=informed_trader,
                     depth_history=depth_history,
                     pnl_history=pnl_history,
+                    rng=run_rng,
                 )
         else:
             with st.spinner(f"Running {steps} steps..."):
@@ -400,7 +403,9 @@ with tab_compare:
     if run_cmp:
         pnls_a: List[float] = []
         pnls_b: List[float] = []
-        detail_a = detail_b = None
+        DetailRun = Tuple[MarketMaker, LimitOrderBook, Metrics, PnLHistory]
+        detail_a: Optional[DetailRun] = None
+        detail_b: Optional[DetailRun] = None
         detail_prices: Optional[List[float]] = None
 
         # fixed for the whole sweep (doesn't depend on seed since same schedule)
@@ -413,7 +418,8 @@ with tab_compare:
             seed_i = int(base_seed) + i
             # A fresh GBM path per seed shared between A and B, rather than one fixed path reused
             # and matches analysis/compare_strategies.py's run_once
-        
+
+            prices_i: Optional[List[float]] = None
             if cmp_use_gbm:
                 if informed_schedule is not None:
                     prices_i = generate_scheduled_drift_garch_gbm_path(
@@ -421,8 +427,6 @@ with tab_compare:
                     )
                 else:
                     prices_i = generate_garch_gbm_path(cmp_steps, seed_i)
-            else:
-                prices_i = None
             result_a = _run_config(cfg_a, seed_i, cmp_steps, cmp_use_gbm, prices_i)
             result_b = _run_config(cfg_b, seed_i, cmp_steps, cmp_use_gbm, prices_i)
             pnls_a.append(result_a[0].mark_to_market(result_a[1]))
@@ -435,7 +439,7 @@ with tab_compare:
 
         st.success(f"Done — {n_seeds} seed{'s' if n_seeds != 1 else ''}.")
 
-        if n_seeds == 1:
+        if detail_a is not None and detail_b is not None:  # only set when n_seeds == 1
             mm_a, book_a, metrics_a, pnl_hist_a = detail_a
             mm_b, book_b, metrics_b, pnl_hist_b = detail_b
 

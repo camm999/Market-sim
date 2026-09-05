@@ -6,29 +6,30 @@ from metrics.pnl_history import PnLHistory
 from simulator.market_maker import MarketMaker
 from simulator.imbalance_trader import ImbalanceTrader
 from simulator.informed_trader import InformedTrader
-import random
+from simulator.rng import RandomSource, resolve
 import time
 
 
-def random_limit_order(book: LimitOrderBook, order_id: int) -> Order:
+def random_limit_order(
+    book: LimitOrderBook, order_id: int, rng: Optional[RandomSource] = None
+) -> Order:
     """generate a random limit order around the mid price."""
-    side: Side = random.choice(["buy", "sell"])
-    size = random.randint(1, 10)
+    draw = resolve(rng)
+    side: Side = draw.choice(["buy", "sell"])
+    size = draw.randint(1, 10)
 
-    mid = book.mid_price()
-    if mid is None:
-        mid = 100  # initial mid price if book is empty
+    mid = book.mid_price()  # always a float, falls back to the book's own starting mid
 
     # price distribution: small random deviation around mid
-    price = mid + random.randint(-3, 3)
+    price = mid + draw.randint(-3, 3)
 
     return Order(order_id, side, price, size)
 
 
-
-def random_market_order(book: LimitOrderBook) -> None:
-    side: Side = random.choice(["buy", "sell"])
-    size = random.randint(1, 10)
+def random_market_order(book: LimitOrderBook, rng: Optional[RandomSource] = None) -> None:
+    draw = resolve(rng)
+    side: Side = draw.choice(["buy", "sell"])
+    size = draw.randint(1, 10)
     book.add_market_order(side, size)
 
 
@@ -44,6 +45,7 @@ def simulate_random_flow(
     informed_trader: Optional[InformedTrader] = None,
     depth_history: Optional[DepthHistory] = None,
     pnl_history: Optional[PnLHistory] = None,
+    rng: Optional[RandomSource] = None,
 ) -> Metrics:
     """
     simulates random order flow using Poisson arrivals.
@@ -51,11 +53,13 @@ def simulate_random_flow(
     lambda_market: probability of a market order arrival
     sleep: seconds to wait between steps (set to 0 for instant runs)
     lists metrics, agents, and optional history trackers to update each step.
-    
+    rng: an explicit random.Random for a reproducible run; omitted, draws come
+    from the module-global `random` as before (see simulator/rng.py).
     """
 
     if metrics is None:
         metrics = Metrics()
+    draw = resolve(rng)
 
     order_id = 1
 
@@ -71,17 +75,17 @@ def simulate_random_flow(
             informed_trader.act(book)
 
         # poisson arrival decides what type of order arrives
-        r = random.random()
+        r = draw.random()
 
         if r < lambda_limit:
             # generate and add a random limit order
-            order = random_limit_order(book, order_id)
+            order = random_limit_order(book, order_id, draw)
             book.add_limit_order(order)
             order_id += 1
 
         elif r < lambda_limit + lambda_market:
             # generate a random market order
-            random_market_order(book)
+            random_market_order(book, draw)
 
         metrics.update(book)
 

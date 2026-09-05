@@ -8,18 +8,16 @@ own quotes, see ANALYSIS.md
 Run (from the project root): python -m analysis.historical_backtest
 """
 
-import random
-from typing import List, Tuple, cast
+from typing import List, Tuple
 
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
-from lob.book import LimitOrderBook
+from analysis.harness import default_imbalance_trader, run_simulation
 from metrics.metrics import Metrics
 from metrics.pnl_history import PnLHistory
 from simulator.avellaneda_stoikov import AvellanedaStoikovMarketMaker
-from simulator.historical_flow import load_price_series, rescale_to_sim_scale, simulate_historical_flow
-from simulator.imbalance_trader import ImbalanceTrader
+from simulator.historical_flow import load_price_series, rescale_to_sim_scale
 from simulator.market_maker import MarketMaker
 
 DATA_PATH = "data/btcusdt_1m.csv"
@@ -28,31 +26,17 @@ SEED = 42
 
 
 def run_market_maker(prices: List[float], seed: int = SEED) -> Tuple[MarketMaker, Metrics, PnLHistory]:
-    random.seed(seed)
-    book = LimitOrderBook()
     mm = MarketMaker(spread=2, size=5, max_inventory=50)
-    it = ImbalanceTrader(threshold=0.4, size=5, max_inventory=50)
-    metrics = Metrics()
-    pnl_history = PnLHistory()
-    simulate_historical_flow(
-        book, prices, market_maker=mm, imbalance_trader=it, metrics=metrics, pnl_history=pnl_history
-    )
-    return mm, metrics, pnl_history
+    run = run_simulation(prices, seed, mm, default_imbalance_trader())
+    return mm, run.metrics, run.pnl_history
 
 
 def run_avellaneda_stoikov(
     prices: List[float], seed: int = SEED
 ) -> Tuple[AvellanedaStoikovMarketMaker, Metrics, PnLHistory]:
-    random.seed(seed)
-    book = LimitOrderBook()
     mm = AvellanedaStoikovMarketMaker(size=5, max_inventory=50, total_steps=len(prices))
-    it = ImbalanceTrader(threshold=0.4, size=5, max_inventory=50)
-    metrics = Metrics()
-    pnl_history = PnLHistory()
-    simulate_historical_flow(
-        book, prices, market_maker=mm, imbalance_trader=it, metrics=metrics, pnl_history=pnl_history
-    )
-    return mm, metrics, pnl_history
+    run = run_simulation(prices, seed, mm, default_imbalance_trader())
+    return mm, run.metrics, run.pnl_history
 
 
 def plot_price_tracking(
@@ -62,18 +46,12 @@ def plot_price_tracking(
     save_path: str = "images/historical_backtest_price.png",
 ) -> Figure:
     """real (rescaled) price path vs. each market maker's own simulated
-    book mid. gives direct read on which market maker's own resting quotes 
+    book mid. gives direct read on which market maker's own resting quotes
     perturb the book furthest from the true exogenous price """
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.plot(prices, label="Real BTCUSDT price (rescaled)", color="tab:blue", linewidth=2)
-    # book.mid_price() always returns a float (falls back to 100, never
-    # None) despite Metrics.mid_prices' Optional[float] annotation.
-    ax.plot(
-        cast(List[float], mm_metrics.mid_prices), label="MarketMaker book mid", color="tab:orange", alpha=0.8
-    )
-    ax.plot(
-        cast(List[float], as_metrics.mid_prices), label="AvellanedaStoikov book mid", color="tab:green", alpha=0.8
-    )
+    ax.plot(mm_metrics.mid_prices, label="MarketMaker book mid", color="tab:orange", alpha=0.8)
+    ax.plot(as_metrics.mid_prices, label="AvellanedaStoikov book mid", color="tab:green", alpha=0.8)
     ax.set_xlabel("Step (1 real minute each)")
     ax.set_ylabel("Price (rescaled)")
     ax.set_title("Simulated book mid tracking a real, exogenous price path")
@@ -127,8 +105,8 @@ if __name__ == "__main__":
         f"inventory_pnl={as_pnl.inventory_pnl[-1]:.2f}, total={as_pnl.total_pnl[-1]:.2f}"
     )
 
-    mm_deviation = mean_abs_deviation(prices, cast(List[float], mm_metrics.mid_prices))
-    as_deviation = mean_abs_deviation(prices, cast(List[float], as_metrics.mid_prices))
+    mm_deviation = mean_abs_deviation(prices, mm_metrics.mid_prices)
+    as_deviation = mean_abs_deviation(prices, as_metrics.mid_prices)
     print(
         f"\nMean |book mid - real anchor|: MarketMaker={mm_deviation:.3f}, "
         f"AvellanedaStoikov={as_deviation:.3f}"

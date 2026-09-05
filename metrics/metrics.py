@@ -9,7 +9,7 @@ from lob.book import LimitOrderBook
 
 class Metrics:
     def __init__(self) -> None:
-        self.mid_prices: List[Optional[float]] = []
+        self.mid_prices: List[float] = []  # mid_price() always returns a float, never None
         self.spreads: List[Optional[float]] = []
         self.bid_depths: List[int] = []
         self.ask_depths: List[int] = []
@@ -28,21 +28,16 @@ class Metrics:
         spread = book.spread()
         self.spreads.append(spread)
 
-        # Depth
-        bid_depth = sum(sum(o.size for o in q) for q in book.bids.values())
-        ask_depth = sum(sum(o.size for o in q) for q in book.asks.values())
-        total_depth = bid_depth + ask_depth
+        # Depth (running totals on the book, so this is O(1) rather than a full walk each step)
+        bid_depth = book.bid_depth()
+        ask_depth = book.ask_depth()
 
         self.bid_depths.append(bid_depth)
         self.ask_depths.append(ask_depth)
-        self.total_depths.append(total_depth)
+        self.total_depths.append(bid_depth + ask_depth)
 
         # Imbalance
-        if total_depth > 0:
-            imbalance = (bid_depth - ask_depth) / total_depth
-        else:
-            imbalance = 0
-        self.imbalances.append(imbalance)
+        self.imbalances.append(book.imbalance())
 
         # Pick up any trades that happened since the last update
         new_trades = book.trades[self._trades_seen :]

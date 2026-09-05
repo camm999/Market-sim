@@ -50,7 +50,7 @@ def generate_scheduled_drift_gbm_path(
     allowing for informed trader,
 
     drift=0.004 default (0.4% per step) is deliberately sized to be comparable
-    in magnitude to the informed-trader windows, big enough to 
+    in magnitude to the informed-trader windows, big enough to
     show up clearly against the sigma=0.02 noise, but still stochastic."""
     rng = random.Random(seed)
     prices = [base]
@@ -80,7 +80,7 @@ def generate_garch_gbm_path(
     nu: float = 5.0,
     base: float = 100.0,
 ) -> List[float]:
-    """similar to generate_gbm_path but with a GARCH(1,1) variance process with student-t innovations 
+    """similar to generate_gbm_path but with a GARCH(1,1) variance process with student-t innovations
     rids constant sigma, see read me for parameter choices.
     `alpha + beta` < 1 for stationary process
     initial sigma^2 seeded at stationary (unconditional) variance,

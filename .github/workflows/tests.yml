@@ -21,5 +21,7 @@ jobs:
       - name: Run tests
         run: python -m pytest -v
 
+      # whole repo, not just the engine: streamlit_app.py, main.py and benchmarks/
+      # used to sit outside this and had type errors nothing was checking for.
       - name: Type check
-        run: python -m mypy lob simulator metrics analysis --ignore-missing-imports --explicit-package-bases
+        run: python -m mypy lob simulator metrics analysis tests benchmarks main.py streamlit_app.py --ignore-missing-imports --explicit-package-bases

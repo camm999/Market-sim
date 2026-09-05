@@ -9,9 +9,6 @@ Anchored to a GARCH(1,1)/ Student-t GBM price path
 Run (from the project root): python -m analysis.compare_strategies
 """
 
-import contextlib
-import io
-import random
 import statistics
 from dataclasses import dataclass
 from typing import List
@@ -20,12 +17,10 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-from lob.book import LimitOrderBook
+from analysis.harness import default_imbalance_trader, run_simulation
 from simulator.gbm_flow import generate_garch_gbm_path
-from simulator.historical_flow import simulate_historical_flow
 from simulator.market_maker import MarketMaker
 from simulator.avellaneda_stoikov import AvellanedaStoikovMarketMaker
-from simulator.imbalance_trader import ImbalanceTrader
 
 
 @dataclass
@@ -58,25 +53,22 @@ def run_once(seed: int, steps: int = 500) -> RunResult:
     """
     prices = generate_garch_gbm_path(steps, seed)
 
-    random.seed(seed)
-    book = LimitOrderBook()
-    mm = MarketMaker(spread=2, size=5, max_inventory=50)
-    it = ImbalanceTrader(threshold=0.4, size=5, max_inventory=50)
-    with contextlib.redirect_stdout(io.StringIO()):  # simulate_historical_flow prints progress; silence it here
-        simulate_historical_flow(book, prices, market_maker=mm, imbalance_trader=it)
-
-    random.seed(seed)
-    as_book = LimitOrderBook()
-    as_mm = AvellanedaStoikovMarketMaker(size=5, max_inventory=50, total_steps=steps)
-    as_it = ImbalanceTrader(threshold=0.4, size=5, max_inventory=50)
-    with contextlib.redirect_stdout(io.StringIO()):
-        simulate_historical_flow(as_book, prices, market_maker=as_mm, imbalance_trader=as_it)
+    it = default_imbalance_trader()
+    heuristic = run_simulation(
+        prices, seed, MarketMaker(spread=2, size=5, max_inventory=50), it
+    )
+    avellaneda = run_simulation(
+        prices,
+        seed,
+        AvellanedaStoikovMarketMaker(size=5, max_inventory=50, total_steps=steps),
+        default_imbalance_trader(),
+    )
 
     return RunResult(
         seed=seed,
-        market_maker_pnl=mm.mark_to_market(book),
-        avellaneda_pnl=as_mm.mark_to_market(as_book),
-        imbalance_trader_pnl=it.mark_to_market(book),
+        market_maker_pnl=heuristic.pnl,
+        avellaneda_pnl=avellaneda.pnl,
+        imbalance_trader_pnl=it.mark_to_market(heuristic.book),
     )
 
 

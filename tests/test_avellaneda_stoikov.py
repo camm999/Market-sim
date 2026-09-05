@@ -1,7 +1,7 @@
 # tests/test_avellaneda_stoikov.py
 """Unit tests for simulator.avellaneda_stoikov.AvellanedaStoikovMarketMaker."""
 
-from lob.book import LimitOrderBook, Order
+from lob.book import LimitOrderBook
 from simulator.avellaneda_stoikov import AvellanedaStoikovMarketMaker
 
 

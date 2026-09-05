@@ -2,19 +2,16 @@
 """
  feeds the market maker an InformedTrader with a known future
 drift schedule and watches inventory_pnl take the hit live (adverse
-selection), then checks whether wider vol-driven spreads and inventory 
+selection), then checks whether wider vol-driven spreads and inventory
 skew actually mitigate it
 
 anchored to a scheduled-drift GARCH(1,1)/Student-t GBM price path
 
-see the README's "Adverse selection stress test" 
+see the README's "Adverse selection stress test"
 
 Run (from the project root): python -m analysis.stress_test_market_maker
 """
 
-import contextlib
-import io
-import random
 import statistics
 from dataclasses import dataclass
 from typing import List, Sequence, Tuple
@@ -22,18 +19,16 @@ from typing import List, Sequence, Tuple
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
-from lob.book import LimitOrderBook, Side
+from analysis.harness import default_imbalance_trader, informed_trader_for, run_simulation
+from lob.book import Side
 from simulator.gbm_flow import generate_scheduled_drift_garch_gbm_path
-from simulator.historical_flow import simulate_historical_flow
 from simulator.market_maker import MarketMaker
-from simulator.imbalance_trader import ImbalanceTrader
-from simulator.informed_trader import InformedTrader
 from metrics.pnl_history import PnLHistory
 
 
 DEFAULT_SCHEDULE: List[Tuple[int, int, Side]] = [(150, 200, "buy"), (350, 400, "sell")]
 STEPS = 600
-REVERSION_WINDOW = 50  
+REVERSION_WINDOW = 50
 N_SEEDS = 30
 VOL_COEFS: Tuple[float, ...] = (0.0, 1.0)
 SKEW_COEFS: Tuple[float, ...] = (0.0, 1.0)
@@ -51,25 +46,12 @@ def run_one(
     """one simulation under one (vol_coef, skew_coef) config and seed;
     returns the recorded PnLHistory"""
     prices = generate_scheduled_drift_garch_gbm_path(steps, seed, schedule, omega=GARCH_OMEGA)
-    random.seed(seed)
-
-    book = LimitOrderBook()
     mm = MarketMaker(spread=2, size=5, max_inventory=50, vol_coef=vol_coef, skew_coef=skew_coef)
-    it = ImbalanceTrader(threshold=0.4, size=5, max_inventory=50)
-    informed = InformedTrader(schedule=schedule, size=4)
-    history = PnLHistory()
 
-    with contextlib.redirect_stdout(io.StringIO()):  # simulate_historical_flow prints progress; silence it here
-        simulate_historical_flow(
-            book,
-            prices,
-            market_maker=mm,
-            imbalance_trader=it,
-            informed_trader=informed,
-            pnl_history=history,
-        )
-
-    return history
+    run = run_simulation(
+        prices, seed, mm, default_imbalance_trader(), informed_trader_for(schedule)
+    )
+    return run.pnl_history
 
 
 def window_metrics(
@@ -80,7 +62,7 @@ def window_metrics(
     """per window: (drawdown, reversion).
 
     drawdown = worst inventory_pnl reached during the window, relative to
-    just before it started 
+    just before it started
     reversion = mean |inventory| over the `reversion_window` steps right
     after the window ends, near flat or not
     """
@@ -177,25 +159,12 @@ def run_demo_scenario(
 ) -> Tuple[MarketMaker, PnLHistory]:
     """single seeded run at default vol_coef=1.0, skew_coef=1.0"""
     prices = generate_scheduled_drift_garch_gbm_path(steps, seed, schedule, omega=GARCH_OMEGA)
-    random.seed(seed)
-
-    book = LimitOrderBook()
     mm = MarketMaker(spread=2, size=5, max_inventory=50)
-    it = ImbalanceTrader(threshold=0.4, size=5, max_inventory=50)
-    informed = InformedTrader(schedule=schedule, size=4)
-    history = PnLHistory()
 
-    with contextlib.redirect_stdout(io.StringIO()):
-        simulate_historical_flow(
-            book,
-            prices,
-            market_maker=mm,
-            imbalance_trader=it,
-            informed_trader=informed,
-            pnl_history=history,
-        )
-
-    return mm, history
+    run = run_simulation(
+        prices, seed, mm, default_imbalance_trader(), informed_trader_for(schedule)
+    )
+    return mm, run.pnl_history
 
 
 def plot_demo_scenario(

@@ -10,7 +10,7 @@ from metrics.pnl_history import PnLHistory
 
 
 """note: this is a simple demo script to show how to run a simulation and plot metrics.
-For more sophisticated analysis, see the scripts in the analysis/ folder, which sweep parameters, 
+for more sophisticated analysis, see the scripts in the analysis/ folder, which sweep parameters,
 and use GBM or historical price paths rather than the random flow used here."""
 
 def main():

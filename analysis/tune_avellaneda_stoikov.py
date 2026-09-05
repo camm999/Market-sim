@@ -2,7 +2,7 @@
 """
 compare_strategies.py's AvellanedaStoikovMarketMaker sweep runs against
 gamma/k picked to keep this sim's price scale stable, not tuned for
-performance. 
+performance.
 
 also has same config as compare_strategies.py
 
@@ -14,9 +14,6 @@ each run is Anchored to a GARCH(1,1)/ Student-t GBM price path
 Run (from the project root): python -m analysis.tune_avellaneda_stoikov
 """
 
-import contextlib
-import io
-import random
 import statistics
 from dataclasses import dataclass
 from typing import List, Sequence
@@ -25,11 +22,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
-from lob.book import LimitOrderBook
+from analysis.harness import default_imbalance_trader, run_simulation
 from simulator.gbm_flow import generate_garch_gbm_path
-from simulator.historical_flow import simulate_historical_flow
 from simulator.avellaneda_stoikov import AvellanedaStoikovMarketMaker
-from simulator.imbalance_trader import ImbalanceTrader
 
 GAMMAS: List[float] = [0.00002, 0.00005, 0.0001, 0.0002, 0.0005, 0.001]
 KS: List[float] = [0.5, 1.0, 1.5, 2.5, 4.0]
@@ -49,16 +44,10 @@ def run_one(gamma: float, k: float, seed: int, steps: int = STEPS) -> float:
     """one simulation under one (gamma, k) config and one seed; returns
     AvellanedaStoikovMarketMaker's final mark-to-market P&L. """
     prices = generate_garch_gbm_path(steps, seed)
-    random.seed(seed)
-
-    book = LimitOrderBook()
     mm = AvellanedaStoikovMarketMaker(size=5, max_inventory=50, gamma=gamma, k=k, total_steps=steps)
-    it = ImbalanceTrader(threshold=0.4, size=5, max_inventory=50)  # held fixed throughout
 
-    with contextlib.redirect_stdout(io.StringIO()):
-        simulate_historical_flow(book, prices, market_maker=mm, imbalance_trader=it)
-
-    return mm.mark_to_market(book)
+    # the imbalance trader is held fixed throughout, only the market maker varies
+    return run_simulation(prices, seed, mm, default_imbalance_trader()).pnl
 
 
 def sweep(

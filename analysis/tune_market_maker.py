@@ -4,14 +4,11 @@ compare_strategies.py found MarketMaker losing to ImbalanceTrader across
 200 seeds. This sweeps MarketMaker's spread and max_inventory across a
 grid to check if there's a tuning problem.
 
-Each run is Anchored to a GARCH(1,1)/ Student-t GBM price path  
+Each run is Anchored to a GARCH(1,1)/ Student-t GBM price path
 
 Run (from the project root): python -m analysis.tune_market_maker
 """
 
-import contextlib
-import io
-import random
 import statistics
 from dataclasses import dataclass
 from typing import List, Sequence
@@ -20,11 +17,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
-from lob.book import LimitOrderBook
+from analysis.harness import default_imbalance_trader, run_simulation
 from simulator.gbm_flow import generate_garch_gbm_path
-from simulator.historical_flow import simulate_historical_flow
 from simulator.market_maker import MarketMaker
-from simulator.imbalance_trader import ImbalanceTrader
 
 SPREADS: List[float] = [1, 2, 3, 4, 6, 8]
 MAX_INVENTORIES: List[int] = [10, 20, 50, 100, 200]
@@ -44,16 +39,10 @@ def run_one(spread: float, max_inventory: int, seed: int, steps: int = STEPS) ->
     """one simulation under one (spread, max_inventory) config and one seed;
     returns MarketMaker's final mark-to-market P&L """
     prices = generate_garch_gbm_path(steps, seed)
-    random.seed(seed)
-
-    book = LimitOrderBook()
     mm = MarketMaker(spread=spread, size=5, max_inventory=max_inventory)
-    it = ImbalanceTrader(threshold=0.4, size=5, max_inventory=50)  # held fixed throughout
 
-    with contextlib.redirect_stdout(io.StringIO()):
-        simulate_historical_flow(book, prices, market_maker=mm, imbalance_trader=it)
-
-    return mm.mark_to_market(book)
+    # the imbalance trader is held fixed throughout, only the market maker varies
+    return run_simulation(prices, seed, mm, default_imbalance_trader()).pnl
 
 
 def sweep(

@@ -27,7 +27,7 @@ class AvellanedaStoikovMarketMaker(MarketMaker):
 
     def __init__(
         self,
-        order_id_start: int = 1_000_000,
+        order_id_start: int = 2_000_000,  # distinct from MarketMaker's, so the two never collide
         size: int = 5,
         max_inventory: int = 50,
         vol_window: int = 20,

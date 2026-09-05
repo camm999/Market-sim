@@ -6,9 +6,9 @@ and compares them head-to-head under the same informed-trader adverse-selection
 stress scenario from (analysis/stress_test_market_maker.py), also see
 something the linear heuristic can't do, flatten quotes toward a trading horizon.
 
-both MMs are ran in separate simulations rather than side by side in one book, simulate_historical_flow only 
-ever quotes one market_maker per run, and since each MM's own quotes shape the book a shared-book 
-comparison wouldn't actually be shared. 
+both MMs are ran in separate simulations rather than side by side in one book, simulate_historical_flow only
+ever quotes one market_maker per run, and since each MM's own quotes shape the book a shared-book
+comparison wouldn't actually be shared.
 
 Both anchored to a GARCH(1,1)/ Student-t GBM price path
 
@@ -16,31 +16,26 @@ Both anchored to a GARCH(1,1)/ Student-t GBM price path
 Run (from the project root): python -m analysis.avellaneda_stoikov_demo
 """
 
-import contextlib
-import io
-import random
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
+from analysis.harness import default_imbalance_trader, informed_trader_for, run_simulation
 from lob.book import LimitOrderBook, Side
 from simulator.gbm_flow import generate_scheduled_drift_garch_gbm_path
-from simulator.historical_flow import simulate_historical_flow
 from simulator.market_maker import MarketMaker
 from simulator.avellaneda_stoikov import AvellanedaStoikovMarketMaker
-from simulator.imbalance_trader import ImbalanceTrader
-from simulator.informed_trader import InformedTrader
 from metrics.pnl_history import PnLHistory
 from analysis.stress_test_market_maker import DEFAULT_SCHEDULE, GARCH_OMEGA, STEPS
 
 
 class _RecordingASMarketMaker(AvellanedaStoikovMarketMaker):
-    """same quoting model as AvellanedaStoikovMarketMaker, records 
+    """same quoting model as AvellanedaStoikovMarketMaker, records
     quoted reservation price and half-spread each step, purely for the
     horizon decay plot below"""
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.reservation_history: List[float] = []
         self.half_spread_history: List[float] = []
@@ -58,24 +53,12 @@ def run_heuristic(
     steps: int = STEPS,
 ) -> Tuple[MarketMaker, PnLHistory]:
     prices = generate_scheduled_drift_garch_gbm_path(steps, seed, schedule, omega=GARCH_OMEGA)
-    random.seed(seed)
-    book = LimitOrderBook()
     mm = MarketMaker(spread=2, size=5, max_inventory=50)
-    it = ImbalanceTrader(threshold=0.4, size=5, max_inventory=50)
-    informed = InformedTrader(schedule=schedule, size=4)
-    history = PnLHistory()
 
-    with contextlib.redirect_stdout(io.StringIO()):
-        simulate_historical_flow(
-            book,
-            prices,
-            market_maker=mm,
-            imbalance_trader=it,
-            informed_trader=informed,
-            pnl_history=history,
-        )
-
-    return mm, history
+    run = run_simulation(
+        prices, seed, mm, default_imbalance_trader(), informed_trader_for(schedule)
+    )
+    return mm, run.pnl_history
 
 
 def run_avellaneda_stoikov(
@@ -84,24 +67,12 @@ def run_avellaneda_stoikov(
     steps: int = STEPS,
 ) -> Tuple[_RecordingASMarketMaker, PnLHistory]:
     prices = generate_scheduled_drift_garch_gbm_path(steps, seed, schedule, omega=GARCH_OMEGA)
-    random.seed(seed)
-    book = LimitOrderBook()
     mm = _RecordingASMarketMaker(size=5, max_inventory=50, total_steps=steps)
-    it = ImbalanceTrader(threshold=0.4, size=5, max_inventory=50)
-    informed = InformedTrader(schedule=schedule, size=4)
-    history = PnLHistory()
 
-    with contextlib.redirect_stdout(io.StringIO()):
-        simulate_historical_flow(
-            book,
-            prices,
-            market_maker=mm,
-            imbalance_trader=it,
-            informed_trader=informed,
-            pnl_history=history,
-        )
-
-    return mm, history
+    run = run_simulation(
+        prices, seed, mm, default_imbalance_trader(), informed_trader_for(schedule)
+    )
+    return mm, run.pnl_history
 
 
 def plot_comparison(

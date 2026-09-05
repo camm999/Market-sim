@@ -12,7 +12,6 @@ once and committed as a static file so runs stay offline and reproducible.
 """
 
 import csv
-import random
 from typing import List, Optional, Sequence
 
 from lob.book import LimitOrderBook, Order, Side
@@ -22,6 +21,7 @@ from metrics.pnl_history import PnLHistory
 from simulator.imbalance_trader import ImbalanceTrader
 from simulator.informed_trader import InformedTrader
 from simulator.market_maker import MarketMaker
+from simulator.rng import RandomSource, resolve
 
 
 def load_price_series(path: str) -> List[float]:
@@ -45,16 +45,16 @@ def rescale_to_sim_scale(prices: Sequence[float], base: float = 100.0) -> List[f
     return rescaled
 
 
-def _historical_limit_order(anchor_price: float, order_id: int) -> Order:
-    side: Side = random.choice(["buy", "sell"])
-    size = random.randint(1, 10)
-    price = anchor_price + random.randint(-3, 3)
+def _historical_limit_order(anchor_price: float, order_id: int, rng: RandomSource) -> Order:
+    side: Side = rng.choice(["buy", "sell"])
+    size = rng.randint(1, 10)
+    price = anchor_price + rng.randint(-3, 3)
     return Order(order_id, side, price, size)
 
 
-def _historical_market_order(book: LimitOrderBook) -> None:
-    side: Side = random.choice(["buy", "sell"])
-    size = random.randint(1, 10)
+def _historical_market_order(book: LimitOrderBook, rng: RandomSource) -> None:
+    side: Side = rng.choice(["buy", "sell"])
+    size = rng.randint(1, 10)
     book.add_market_order(side, size)
 
 
@@ -69,6 +69,7 @@ def simulate_historical_flow(
     informed_trader: Optional[InformedTrader] = None,
     depth_history: Optional[DepthHistory] = None,
     pnl_history: Optional[PnLHistory] = None,
+    rng: Optional[RandomSource] = None,
 ) -> Metrics:
     """
     same per-step loop as simulate_random_flow, run for
@@ -76,9 +77,13 @@ def simulate_historical_flow(
     historical price point, in order. Each synthetic order is anchored to
     prices[t] (see rescale_to_sim_scale) rather than the book's own mid,
     so the fair-value process driving this run is real, not generated.
+
+    rng: an explicit random.Random for a reproducible run; omitted, draws come
+    from the module-global `random` as before (see simulator/rng.py).
     """
     if metrics is None:
         metrics = Metrics()
+    draw = resolve(rng)
 
     order_id = 1
 
@@ -92,14 +97,14 @@ def simulate_historical_flow(
         if informed_trader is not None:
             informed_trader.act(book)
 
-        r = random.random()
+        r = draw.random()
 
         if r < lambda_limit:
-            order = _historical_limit_order(anchor, order_id)
+            order = _historical_limit_order(anchor, order_id, draw)
             book.add_limit_order(order)
             order_id += 1
         elif r < lambda_limit + lambda_market:
-            _historical_market_order(book)
+            _historical_market_order(book, draw)
 
         metrics.update(book)
 
